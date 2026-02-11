@@ -32,6 +32,7 @@ class EpisodeCandidate:
     title: str
     summary: str
     has_infinity_plus_marker: bool
+    requires_subscription: bool | None = None
 
 
 def now_iso() -> str:
@@ -99,10 +100,51 @@ def extract_candidates(html: str) -> List[EpisodeCandidate]:
     return out
 
 
+def fetch_requires_subscription(episode_url: str) -> bool | None:
+    """Return True/False from JSON-LD requiresSubscription, or None if unknown."""
+    try:
+        html = requests.get(episode_url, timeout=30).text
+    except Exception:
+        return None
+
+    soup = BeautifulSoup(html, "html.parser")
+    for s in soup.find_all("script"):
+        t = (s.get("type") or "").lower()
+        if "application/ld+json" not in t:
+            continue
+        raw = (s.string or s.get_text() or "").strip()
+        if not raw:
+            continue
+        try:
+            obj = json.loads(raw)
+        except Exception:
+            continue
+
+        objs = obj if isinstance(obj, list) else [obj]
+        for item in objs:
+            if not isinstance(item, dict):
+                continue
+            if "VideoObject" in str(item.get("@type")) or item.get("@type") == "Episode":
+                value = item.get("requiresSubscription")
+                if isinstance(value, bool):
+                    return value
+                if isinstance(value, str):
+                    lv = value.strip().lower()
+                    if lv in {"true", "1", "yes"}:
+                        return True
+                    if lv in {"false", "0", "no"}:
+                        return False
+    return None
+
+
 def pick_latest_free(candidates: List[EpisodeCandidate]) -> EpisodeCandidate | None:
     # listing order is newest first on current site
     for c in candidates:
-        if not c.has_infinity_plus_marker:
+        c.requires_subscription = fetch_requires_subscription(c.url)
+        if c.requires_subscription is False:
+            return c
+        # fallback heuristic only if we couldn't determine from episode page
+        if c.requires_subscription is None and not c.has_infinity_plus_marker:
             return c
     return None
 
