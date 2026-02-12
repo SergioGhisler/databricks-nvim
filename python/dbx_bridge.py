@@ -9,9 +9,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from dataclasses import asdict, is_dataclass
 from enum import Enum
 from typing import Any
+
+import requests
 
 
 def _to_jsonable(obj: Any) -> Any:
@@ -112,11 +115,90 @@ def cmd_describe(args: argparse.Namespace) -> dict[str, Any]:
     return _to_jsonable(t)
 
 
+def _resolve_host_token(args: argparse.Namespace) -> tuple[str | None, str | None]:
+    host = getattr(args, "host", None)
+    token = getattr(args, "token", None)
+    if host and token:
+        return host.rstrip("/"), token
+
+    try:
+        w = _client(args)
+        cfg = w.config
+        host = host or getattr(cfg, "host", None)
+        token = token or getattr(cfg, "token", None)
+    except Exception:
+        pass
+
+    if host:
+        host = host.rstrip("/")
+    return host, token
+
+
+def cmd_sample(args: argparse.Namespace) -> dict[str, Any]:
+    host, token = _resolve_host_token(args)
+    if not host or not token:
+        raise ValueError("sample requires host+token auth (or profile that resolves to token)")
+    if not args.warehouse_id:
+        raise ValueError("sample requires --warehouse-id (configure workspace warehouse_id)")
+
+    full_name = f"{args.catalog}.{args.schema}.{args.table}"
+    limit = max(1, min(int(args.limit or 20), 200))
+    statement = f"SELECT * FROM {full_name} LIMIT {limit}"
+
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    create_url = f"{host}/api/2.0/sql/statements"
+    payload = {
+        "warehouse_id": args.warehouse_id,
+        "statement": statement,
+        "wait_timeout": "30s",
+        "disposition": "INLINE",
+    }
+
+    r = requests.post(create_url, headers=headers, json=payload, timeout=45)
+    r.raise_for_status()
+    data = r.json()
+
+    status = ((data.get("status") or {}).get("state") or "").upper()
+    stmt_id = data.get("statement_id")
+
+    if status not in {"SUCCEEDED", "FAILED", "CANCELED", "CLOSED"} and stmt_id:
+        poll_url = f"{host}/api/2.0/sql/statements/{stmt_id}"
+        for _ in range(20):
+            time.sleep(1)
+            p = requests.get(poll_url, headers=headers, timeout=20)
+            p.raise_for_status()
+            data = p.json()
+            status = ((data.get("status") or {}).get("state") or "").upper()
+            if status in {"SUCCEEDED", "FAILED", "CANCELED", "CLOSED"}:
+                break
+
+    if status != "SUCCEEDED":
+        return {
+            "status": status or "UNKNOWN",
+            "statement": statement,
+            "error": ((data.get("status") or {}).get("error") or data.get("error") or data),
+        }
+
+    result = data.get("result") or {}
+    schema = ((result.get("manifest") or {}).get("schema") or {}).get("columns") or []
+    cols = [c.get("name") for c in schema if isinstance(c, dict)]
+    rows = result.get("data_array") or []
+
+    return {
+        "status": status,
+        "statement": statement,
+        "columns": cols,
+        "rows": rows,
+        "row_count": len(rows),
+    }
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="dbx_bridge.py")
     p.add_argument("--profile", default=None, help="Databricks SDK profile name")
     p.add_argument("--host", default=None, help="Databricks workspace host")
     p.add_argument("--token", default=None, help="Databricks PAT token")
+    p.add_argument("--warehouse-id", default=None, help="Databricks SQL warehouse id")
 
     sub = p.add_subparsers(dest="command", required=True)
 
@@ -134,6 +216,12 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--schema", required=True)
     d.add_argument("--table", required=True)
 
+    sm = sub.add_parser("sample")
+    sm.add_argument("--catalog", required=True)
+    sm.add_argument("--schema", required=True)
+    sm.add_argument("--table", required=True)
+    sm.add_argument("--limit", type=int, default=20)
+
     return p
 
 
@@ -150,6 +238,8 @@ def main() -> int:
             result = cmd_tables(args)
         elif args.command == "describe":
             result = cmd_describe(args)
+        elif args.command == "sample":
+            result = cmd_sample(args)
         else:
             raise ValueError(f"Unknown command: {args.command}")
 

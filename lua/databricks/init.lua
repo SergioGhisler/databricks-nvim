@@ -30,7 +30,7 @@ local function cmd_profiles()
 
   for name, p in pairs(profiles) do
     local mark = (name == active) and "*" or " "
-    table.insert(rows, string.format("%s %s  host=%s sdk_profile=%s", mark, name, p.host or "-", p.sdk_profile or "-"))
+    table.insert(rows, string.format("%s %s  host=%s sdk_profile=%s warehouse=%s", mark, name, p.host or "-", p.sdk_profile or "-", p.warehouse_id or "-"))
   end
 
   table.sort(rows)
@@ -44,7 +44,7 @@ end
 
 local function cmd_profile_add(args)
   if #args < 2 then
-    notify("Usage: :DbxProfileAdd <name> <host> [token] [sdk_profile]", vim.log.levels.WARN)
+    notify("Usage: :DbxProfileAdd <name> <host> [token] [sdk_profile] [warehouse_id]", vim.log.levels.WARN)
     return
   end
 
@@ -52,6 +52,7 @@ local function cmd_profile_add(args)
   local host = args[2]
   local token = args[3]
   local sdk_profile = args[4]
+  local warehouse_id = args[5]
 
   if not token or token == "" then
     token = vim.fn.inputsecret("Databricks token (optional): ")
@@ -61,6 +62,7 @@ local function cmd_profile_add(args)
     host = host,
     token = token,
     sdk_profile = sdk_profile,
+    warehouse_id = warehouse_id,
   })
   notify("Saved workspace: " .. name)
 end
@@ -70,6 +72,7 @@ local function cmd_workspace_login(args)
   local host = args[2] or ""
   local token = args[3] or ""
   local sdk_profile = args[4] or ""
+  local warehouse_id = args[5] or ""
 
   if name == "" then
     name = vim.fn.input("Workspace name: ")
@@ -95,10 +98,15 @@ local function cmd_workspace_login(args)
     sdk_profile = vim.fn.input("SDK profile name (optional): ")
   end
 
+  if warehouse_id == "" then
+    warehouse_id = vim.fn.input("SQL warehouse id (optional, for sample query): ")
+  end
+
   config.add_profile(name, {
     host = host,
     token = token,
     sdk_profile = sdk_profile,
+    warehouse_id = warehouse_id,
   })
   config.use_profile(name)
   notify("Workspace saved and selected: " .. name)
@@ -265,6 +273,32 @@ local function cmd_describe(catalog, schema, tbl)
   ui.show_json(string.format("%s.%s.%s", catalog, schema, tbl), payload, config.options.ui)
 end
 
+local function cmd_explorer()
+  ui.explorer_overlay(config.options.ui, {
+    list_catalogs = function()
+      return bridge.catalogs()
+    end,
+    list_schemas = function(catalog)
+      return bridge.schemas(catalog)
+    end,
+    list_tables = function(catalog, schema)
+      return bridge.tables(catalog, schema)
+    end,
+    describe = function(catalog, schema, tbl)
+      return bridge.describe(catalog, schema, tbl)
+    end,
+    sample = function(catalog, schema, tbl, limit)
+      return bridge.sample(catalog, schema, tbl, limit)
+    end,
+    on_error = function(err)
+      notify(err, vim.log.levels.ERROR)
+    end,
+    on_info = function(msg)
+      notify(msg)
+    end,
+  })
+end
+
 local function create_commands()
   vim.api.nvim_create_user_command("DbxCatalogs", function()
     cmd_catalogs()
@@ -324,6 +358,10 @@ local function create_commands()
 
   vim.api.nvim_create_user_command("DbxUI", function()
     cmd_workspace_ui()
+  end, {})
+
+  vim.api.nvim_create_user_command("DbxExplorer", function()
+    cmd_explorer()
   end, {})
 end
 

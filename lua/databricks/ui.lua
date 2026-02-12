@@ -16,7 +16,6 @@ local function make_float(lines, title, opts)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   vim.bo[buf].bufhidden = "wipe"
-  vim.bo[buf].filetype = "json"
 
   local win = vim.api.nvim_open_win(buf, true, {
     relative = "editor",
@@ -47,7 +46,8 @@ end
 function M.show_json(title, obj, opts)
   local pretty = vim.inspect(obj)
   local lines = vim.split(pretty, "\n", { plain = true })
-  make_float(lines, title, opts)
+  local buf = make_float(lines, title, opts)
+  vim.bo[buf].filetype = "lua"
 end
 
 function M.workspace_overlay(state, opts, handlers)
@@ -126,6 +126,216 @@ function M.workspace_overlay(state, opts, handlers)
     handlers.add()
     refresh()
   end)
+end
+
+function M.explorer_overlay(opts, handlers)
+  local nodes = {}
+  local expanded = {}
+  local row_map = {}
+
+  local function key_for(kind, a, b, c)
+    return table.concat({ kind or "", a or "", b or "", c or "" }, "|")
+  end
+
+  local function safe(fn, ...)
+    local ok, data = pcall(fn, ...)
+    if not ok then
+      if handlers.on_error then
+        handlers.on_error(data)
+      end
+      return nil
+    end
+    return data
+  end
+
+  local function ensure_catalogs()
+    if #nodes > 0 then
+      return
+    end
+    local catalogs = safe(handlers.list_catalogs)
+    if not catalogs then
+      return
+    end
+    nodes = {}
+    for _, c in ipairs(catalogs) do
+      table.insert(nodes, { kind = "catalog", name = c.name, children = nil })
+    end
+  end
+
+  local function ensure_children(node)
+    if node.children then
+      return
+    end
+
+    if node.kind == "catalog" then
+      local schemas = safe(handlers.list_schemas, node.name) or {}
+      node.children = {}
+      for _, s in ipairs(schemas) do
+        table.insert(node.children, { kind = "schema", catalog = node.name, name = s.name, children = nil })
+      end
+      return
+    end
+
+    if node.kind == "schema" then
+      local tables = safe(handlers.list_tables, node.catalog, node.name) or {}
+      node.children = {}
+      for _, t in ipairs(tables) do
+        table.insert(node.children, { kind = "table", catalog = node.catalog, schema = node.name, name = t.name })
+      end
+    end
+  end
+
+  local function render_lines()
+    ensure_catalogs()
+    local lines = {
+      "Databricks Explorer",
+      "",
+      "[Enter/l] expand-open  [h] collapse  [d] describe  [s] sample  [r] refresh  [q] close",
+      "",
+    }
+    row_map = {}
+
+    local function add_line(prefix, label, node)
+      table.insert(lines, prefix .. label)
+      row_map[#lines] = node
+    end
+
+    for _, c in ipairs(nodes) do
+      local ck = key_for("catalog", c.name)
+      local c_open = expanded[ck]
+      add_line(c_open and "▾ " or "▸ ", c.name, c)
+      if c_open then
+        ensure_children(c)
+        for _, s in ipairs(c.children or {}) do
+          local sk = key_for("schema", s.catalog, s.name)
+          local s_open = expanded[sk]
+          add_line("  " .. (s_open and "▾ " or "▸ "), s.name, s)
+          if s_open then
+            ensure_children(s)
+            for _, t in ipairs(s.children or {}) do
+              add_line("    • ", t.name, t)
+            end
+          end
+        end
+      end
+    end
+
+    if #nodes == 0 then
+      table.insert(lines, "(no catalogs found)")
+    end
+
+    return lines
+  end
+
+  local lines = render_lines()
+  local buf, win = make_float(lines, "databricks.nvim explorer", opts)
+  vim.bo[buf].modifiable = false
+  vim.bo[buf].filetype = "databricks"
+
+  local function refresh(reset)
+    if reset then
+      nodes = {}
+    end
+    lines = render_lines()
+    vim.bo[buf].modifiable = true
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    vim.bo[buf].modifiable = false
+  end
+
+  local function current_node()
+    local row = vim.api.nvim_win_get_cursor(win)[1]
+    return row_map[row]
+  end
+
+  local function close()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+
+  local function open_or_expand()
+    local node = current_node()
+    if not node then
+      return
+    end
+    if node.kind == "catalog" then
+      local k = key_for("catalog", node.name)
+      expanded[k] = not expanded[k]
+      refresh(false)
+      return
+    end
+    if node.kind == "schema" then
+      local k = key_for("schema", node.catalog, node.name)
+      expanded[k] = not expanded[k]
+      refresh(false)
+      return
+    end
+    if node.kind == "table" then
+      local payload = safe(handlers.describe, node.catalog, node.schema, node.name)
+      if payload then
+        M.show_json(string.format("%s.%s.%s", node.catalog, node.schema, node.name), payload, opts)
+      end
+    end
+  end
+
+  local function collapse()
+    local node = current_node()
+    if not node then
+      return
+    end
+    if node.kind == "schema" then
+      expanded[key_for("schema", node.catalog, node.name)] = false
+      refresh(false)
+      return
+    end
+    if node.kind == "catalog" then
+      expanded[key_for("catalog", node.name)] = false
+      refresh(false)
+    end
+  end
+
+  local function sample()
+    local node = current_node()
+    if not node or node.kind ~= "table" then
+      if handlers.on_info then
+        handlers.on_info("Select a table row to sample")
+      end
+      return
+    end
+    local payload = safe(handlers.sample, node.catalog, node.schema, node.name, 20)
+    if payload then
+      M.show_json(string.format("sample %s.%s.%s", node.catalog, node.schema, node.name), payload, opts)
+    end
+  end
+
+  local function describe()
+    local node = current_node()
+    if not node or node.kind ~= "table" then
+      if handlers.on_info then
+        handlers.on_info("Select a table row to describe")
+      end
+      return
+    end
+    local payload = safe(handlers.describe, node.catalog, node.schema, node.name)
+    if payload then
+      M.show_json(string.format("%s.%s.%s", node.catalog, node.schema, node.name), payload, opts)
+    end
+  end
+
+  local function map(lhs, rhs)
+    vim.keymap.set("n", lhs, rhs, { buffer = buf, nowait = true, silent = true })
+  end
+
+  map("q", close)
+  map("<Esc>", close)
+  map("r", function()
+    refresh(true)
+  end)
+  map("<CR>", open_or_expand)
+  map("l", open_or_expand)
+  map("h", collapse)
+  map("d", describe)
+  map("s", sample)
 end
 
 return M

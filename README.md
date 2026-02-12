@@ -14,6 +14,7 @@ Neovim plugin for Databricks workflows without leaving Neovim.
 - `:DbxDescribe [catalog] [schema] [table]` → float with table metadata
 - `:DbxWorkspaceLogin / :DbxWorkspaces / :DbxWorkspaceUse / :DbxWorkspaceDelete`
 - `:DbxWorkspaceUI` (overlay manager like lazygit-style flow)
+- `:DbxExplorer` (catalog → schema → table explorer with describe/sample)
 - Profile commands are still available as compatibility aliases
 
 All from Neovim commands/UI.
@@ -146,7 +147,7 @@ Then restart shell / Neovim.
 ### Workspace management (preferred)
 
 - `:DbxWorkspaces`
-- `:DbxWorkspaceLogin [name] [host] [token] [sdk_profile]`
+- `:DbxWorkspaceLogin [name] [host] [token] [sdk_profile] [warehouse_id]`
 - `:DbxWorkspaceUse [name]`
 - `:DbxWorkspaceDelete [name]`
 - `:DbxWorkspaceUI` (or `:DbxUI`) interactive floating overlay
@@ -154,6 +155,13 @@ Then restart shell / Neovim.
   - `a` add/login workspace
   - `d` delete selected workspace
   - `r` refresh
+  - `q` close
+- `:DbxExplorer` interactive data explorer
+  - `l` / `<Enter>` expand/open
+  - `h` collapse
+  - `d` describe table
+  - `s` sample rows (requires workspace `warehouse_id`)
+  - `r` refresh tree
   - `q` close
 
 ### Profile aliases (backward compatible)

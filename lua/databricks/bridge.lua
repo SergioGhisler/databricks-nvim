@@ -66,4 +66,11 @@ function M.describe(catalog, schema, table)
   return run_bridge({ "describe", "--catalog", catalog, "--schema", schema, "--table", table })
 end
 
+function M.sample(catalog, schema, table, limit)
+  local args = { "sample" }
+  vim.list_extend(args, config.resolve_warehouse_arg())
+  vim.list_extend(args, { "--catalog", catalog, "--schema", schema, "--table", table, "--limit", tostring(limit or 20) })
+  return run_bridge(args)
+end
+
 return M

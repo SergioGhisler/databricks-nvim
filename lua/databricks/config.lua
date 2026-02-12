@@ -91,6 +91,7 @@ function M.add_profile(name, cfg)
     host = cfg.host,
     token = cfg.token,
     sdk_profile = cfg.sdk_profile,
+    warehouse_id = cfg.warehouse_id,
   }
   if not M.state.active_profile then
     M.state.active_profile = name
@@ -144,6 +145,14 @@ function M.resolve_auth_args()
     table.insert(out, p.token)
   end
   return out
+end
+
+function M.resolve_warehouse_arg()
+  local p = M.get_active_profile()
+  if not p or not p.warehouse_id or p.warehouse_id == "" then
+    return {}
+  end
+  return { "--warehouse-id", p.warehouse_id }
 end
 
 return M
