@@ -153,7 +153,7 @@ def main() -> int:
         else:
             raise ValueError(f"Unknown command: {args.command}")
 
-        print(json.dumps(result, ensure_ascii=False))
+        print(json.dumps(result, ensure_ascii=False, default=str))
         return 0
     except Exception as e:
         print(json.dumps({"error": str(e)}))
