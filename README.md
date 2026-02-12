@@ -13,6 +13,7 @@ Neovim plugin for Databricks workflows without leaving Neovim.
 - `:DbxTables [catalog] [schema]` → list tables
 - `:DbxDescribe [catalog] [schema] [table]` → float with table metadata
 - `:DbxWorkspaceLogin / :DbxWorkspaces / :DbxWorkspaceUse / :DbxWorkspaceDelete`
+- `:DbxWorkspaceUI` (overlay manager like lazygit-style flow)
 - Profile commands are still available as compatibility aliases
 
 All from Neovim commands/UI.
@@ -130,6 +131,12 @@ Then restart shell / Neovim.
 - `:DbxWorkspaceLogin [name] [host] [token] [sdk_profile]`
 - `:DbxWorkspaceUse [name]`
 - `:DbxWorkspaceDelete [name]`
+- `:DbxWorkspaceUI` (or `:DbxUI`) interactive floating overlay
+  - `<Enter>` use workspace
+  - `a` add/login workspace
+  - `d` delete selected workspace
+  - `r` refresh
+  - `q` close
 
 ### Profile aliases (backward compatible)
 
