@@ -157,6 +157,29 @@ local function cmd_profile_remove(name)
   end
 end
 
+local function cmd_workspace_ui()
+  ui.workspace_overlay({
+    profiles = config.get_profiles(),
+    active = config.get_active_profile_name(),
+  }, config.options.ui, {
+    use = function(name)
+      config.use_profile(name)
+      notify("Active workspace: " .. name)
+    end,
+    delete = function(name)
+      local ok = config.remove_profile(name)
+      if ok then
+        notify("Removed workspace: " .. name)
+      else
+        notify("Workspace not found: " .. name, vim.log.levels.ERROR)
+      end
+    end,
+    add = function()
+      cmd_workspace_login({})
+    end,
+  })
+end
+
 local function cmd_catalogs()
   local ok, catalogs = pcall(bridge.catalogs)
   if not ok then
@@ -294,6 +317,14 @@ local function create_commands()
   vim.api.nvim_create_user_command("DbxWorkspaceDelete", function(opts)
     cmd_profile_remove(opts.args)
   end, { nargs = "?", complete = profile_names })
+
+  vim.api.nvim_create_user_command("DbxWorkspaceUI", function()
+    cmd_workspace_ui()
+  end, {})
+
+  vim.api.nvim_create_user_command("DbxUI", function()
+    cmd_workspace_ui()
+  end, {})
 end
 
 function M.setup(opts)
