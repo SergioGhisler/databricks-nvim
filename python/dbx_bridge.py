@@ -10,6 +10,7 @@ import argparse
 import json
 import sys
 from dataclasses import asdict, is_dataclass
+from enum import Enum
 from typing import Any
 
 
@@ -25,9 +26,12 @@ def _to_jsonable(obj: Any) -> Any:
     if isinstance(obj, dict):
         return {str(k): _to_jsonable(v) for k, v in obj.items()}
 
+    if isinstance(obj, Enum):
+        return obj.value
+
     fn = getattr(obj, "as_dict", None)
     if callable(fn):
-        return fn()
+        return _to_jsonable(fn())
 
     return str(obj)
 
