@@ -2,13 +2,34 @@ local config = require("databricks.config")
 
 local M = {}
 
+local function build_runtime_cmd(script)
+  local uv_enabled = config.options.uv and config.options.uv.enabled
+  if config.options.python == "uv" then
+    uv_enabled = true
+  end
+
+  if uv_enabled then
+    local cmd = { "uv", "run" }
+    local uv_with = (config.options.uv and config.options.uv.with) or { "databricks-sdk" }
+    for _, pkg in ipairs(uv_with) do
+      table.insert(cmd, "--with")
+      table.insert(cmd, pkg)
+    end
+    table.insert(cmd, "python")
+    table.insert(cmd, script)
+    return cmd
+  end
+
+  return { config.options.python, script }
+end
+
 local function run_bridge(args)
   local script = config.options.bridge_script
   if not script or script == "" then
     error("databricks.nvim: bridge_script is not configured")
   end
 
-  local cmd = { config.options.python, script }
+  local cmd = build_runtime_cmd(script)
   vim.list_extend(cmd, config.resolve_auth_args())
   vim.list_extend(cmd, args)
 
