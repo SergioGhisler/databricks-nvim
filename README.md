@@ -15,6 +15,7 @@ Neovim plugin for Databricks workflows without leaving Neovim.
 - `:DbxWorkspaceLogin / :DbxWorkspaces / :DbxWorkspaceUse / :DbxWorkspaceDelete`
 - `:DbxWorkspaceUI` (overlay manager like lazygit-style flow)
 - `:DbxExplorer` (catalog → schema → table explorer with describe/sample)
+- `:DbxTui` (launch external TUI in floating terminal)
 - Profile commands are still available as compatibility aliases
 
 All from Neovim commands/UI.
@@ -62,6 +63,12 @@ python3 -m pip install --user databricks-sdk
       },
 
       bridge_script = vim.fn.stdpath("data") .. "/lazy/databricks-nvim/python/dbx_bridge.py",
+      tui = {
+        cmd = { "databricks-tui" }, -- or { "node", "/path/to/databricks-tui/dist/index.js" }
+        title = "databricks-tui",
+        width = 0.9,
+        height = 0.9,
+      },
       ui = {
         border = "rounded",
         width = 0.7,

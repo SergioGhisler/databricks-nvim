@@ -299,6 +299,42 @@ local function cmd_explorer()
   })
 end
 
+local function cmd_tui()
+  local t = config.options.tui or {}
+  local width = math.floor(vim.o.columns * (t.width or 0.9))
+  local height = math.floor(vim.o.lines * (t.height or 0.9))
+  local row = math.floor((vim.o.lines - height) / 2)
+  local col = math.floor((vim.o.columns - width) / 2)
+
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].bufhidden = "wipe"
+
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    width = width,
+    height = height,
+    row = row,
+    col = col,
+    style = "minimal",
+    border = config.options.ui.border or "rounded",
+    title = t.title or "databricks-tui",
+    title_pos = "center",
+  })
+
+  local cmd = t.cmd or { "databricks-tui" }
+  if type(cmd) == "string" then
+    cmd = { cmd }
+  end
+  vim.fn.termopen(cmd)
+  vim.cmd("startinsert")
+
+  vim.keymap.set("n", "q", function()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end, { buffer = buf, nowait = true, silent = true })
+end
+
 local function create_commands()
   vim.api.nvim_create_user_command("DbxCatalogs", function()
     cmd_catalogs()
@@ -362,6 +398,10 @@ local function create_commands()
 
   vim.api.nvim_create_user_command("DbxExplorer", function()
     cmd_explorer()
+  end, {})
+
+  vim.api.nvim_create_user_command("DbxTui", function()
+    cmd_tui()
   end, {})
 end
 

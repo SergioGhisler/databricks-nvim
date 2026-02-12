@@ -8,6 +8,12 @@ M.defaults = {
     enabled = false,
     with = { "databricks-sdk" },
   },
+  tui = {
+    cmd = { "databricks-tui" },
+    title = "databricks-tui",
+    width = 0.9,
+    height = 0.9,
+  },
   ui = {
     border = "rounded",
     width = 0.7,
