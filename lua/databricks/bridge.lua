@@ -9,6 +9,7 @@ local function run_bridge(args)
   end
 
   local cmd = { config.options.python, script }
+  vim.list_extend(cmd, config.resolve_auth_args())
   vim.list_extend(cmd, args)
 
   local out = vim.fn.system(cmd)
@@ -19,6 +20,10 @@ local function run_bridge(args)
   local ok, decoded = pcall(vim.json.decode, out)
   if not ok then
     error("databricks.nvim: failed to parse bridge JSON\n" .. out)
+  end
+
+  if type(decoded) == "table" and decoded.error then
+    error("databricks.nvim bridge error: " .. tostring(decoded.error))
   end
 
   return decoded

@@ -13,6 +13,74 @@ local function notify(msg, level)
   vim.notify(msg, level or vim.log.levels.INFO, { title = "databricks.nvim" })
 end
 
+local function split_args(s)
+  return vim.split(s or "", "%s+", { trimempty = true })
+end
+
+local function cmd_profiles()
+  local profiles = config.get_profiles()
+  local active = config.get_active_profile_name()
+  local rows = {}
+
+  for name, p in pairs(profiles) do
+    local mark = (name == active) and "*" or " "
+    table.insert(rows, string.format("%s %s  host=%s sdk_profile=%s", mark, name, p.host or "-", p.sdk_profile or "-"))
+  end
+
+  table.sort(rows)
+  if #rows == 0 then
+    notify("No profiles configured. Use :DbxProfileAdd <name> <host> [token] [sdk_profile]")
+    return
+  end
+
+  ui.show_json("Databricks Profiles", rows, config.options.ui)
+end
+
+local function cmd_profile_add(args)
+  if #args < 2 then
+    notify("Usage: :DbxProfileAdd <name> <host> [token] [sdk_profile]", vim.log.levels.WARN)
+    return
+  end
+
+  local name = args[1]
+  local host = args[2]
+  local token = args[3]
+  local sdk_profile = args[4]
+
+  if not token or token == "" then
+    token = vim.fn.inputsecret("Databricks token (optional): ")
+  end
+
+  config.add_profile(name, {
+    host = host,
+    token = token,
+    sdk_profile = sdk_profile,
+  })
+  notify("Saved profile: " .. name)
+end
+
+local function cmd_profile_use(name)
+  if not name or name == "" then
+    notify("Usage: :DbxProfileUse <name>", vim.log.levels.WARN)
+    return
+  end
+
+  if config.use_profile(name) then
+    notify("Active profile: " .. name)
+  else
+    notify("Profile not found: " .. name, vim.log.levels.ERROR)
+  end
+end
+
+local function cmd_profile_remove(name)
+  if not name or name == "" then
+    notify("Usage: :DbxProfileRemove <name>", vim.log.levels.WARN)
+    return
+  end
+  config.remove_profile(name)
+  notify("Removed profile: " .. name)
+end
+
 local function cmd_catalogs()
   local ok, catalogs = pcall(bridge.catalogs)
   if not ok then
@@ -108,14 +176,34 @@ local function create_commands()
   end, { nargs = "?" })
 
   vim.api.nvim_create_user_command("DbxTables", function(opts)
-    local args = vim.split(opts.args or "", "%s+", { trimempty = true })
+    local args = split_args(opts.args)
     cmd_tables(args[1] or "", args[2] or "")
   end, { nargs = "*" })
 
   vim.api.nvim_create_user_command("DbxDescribe", function(opts)
-    local args = vim.split(opts.args or "", "%s+", { trimempty = true })
+    local args = split_args(opts.args)
     cmd_describe(args[1] or "", args[2] or "", args[3] or "")
   end, { nargs = "*" })
+
+  vim.api.nvim_create_user_command("DbxProfiles", function()
+    cmd_profiles()
+  end, {})
+
+  vim.api.nvim_create_user_command("DbxProfileAdd", function(opts)
+    cmd_profile_add(split_args(opts.args))
+  end, { nargs = "+" })
+
+  vim.api.nvim_create_user_command("DbxProfileUse", function(opts)
+    cmd_profile_use(opts.args)
+  end, { nargs = 1, complete = function()
+    return vim.tbl_keys(config.get_profiles())
+  end })
+
+  vim.api.nvim_create_user_command("DbxProfileRemove", function(opts)
+    cmd_profile_remove(opts.args)
+  end, { nargs = 1, complete = function()
+    return vim.tbl_keys(config.get_profiles())
+  end })
 end
 
 function M.setup(opts)

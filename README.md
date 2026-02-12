@@ -2,18 +2,19 @@
 
 Neovim plugin for Databricks workflows without leaving Neovim.
 
-> Current stage: MVP (catalog/schema/table exploration + table describe)
+> Current stage: MVP+ (catalog/schema/table exploration + table describe + multi-workspace profiles)
 
 ---
 
-## Features (MVP)
+## Features
 
 - `:DbxCatalogs` → list Unity Catalog catalogs
 - `:DbxSchemas [catalog]` → list schemas
 - `:DbxTables [catalog] [schema]` → list tables
 - `:DbxDescribe [catalog] [schema] [table]` → float with table metadata
+- `:DbxProfileAdd / :DbxProfiles / :DbxProfileUse / :DbxProfileRemove`
 
-All powered from inside Neovim commands/UI.
+All from Neovim commands/UI.
 
 ---
 
@@ -21,10 +22,19 @@ All powered from inside Neovim commands/UI.
 
 - Neovim `>= 0.9`
 - Python `>= 3.10`
+- [`uv`](https://docs.astral.sh/uv/) (recommended)
 - [`databricks-sdk`](https://pypi.org/project/databricks-sdk/)
-- Databricks auth configured (`DATABRICKS_HOST` + `DATABRICKS_TOKEN`, or standard SDK auth chain)
 
-Install Python dependency:
+Install Python dependency with `uv`:
+
+```bash
+uv tool install --with databricks-sdk databricks-sdk
+# OR project-local:
+uv venv
+uv pip install databricks-sdk
+```
+
+If you prefer pip:
 
 ```bash
 python3 -m pip install --user databricks-sdk
@@ -39,7 +49,7 @@ python3 -m pip install --user databricks-sdk
   "SergioGhisler/databricks-nvim",
   config = function()
     require("databricks").setup({
-      python = "python3",
+      python = "python3", -- or path to uv-managed python
       bridge_script = vim.fn.stdpath("data") .. "/lazy/databricks-nvim/python/dbx_bridge.py",
       ui = {
         border = "rounded",
@@ -55,39 +65,79 @@ If you install to a custom path, set `bridge_script` accordingly.
 
 ---
 
-## Databricks auth
+## Auth / Workspace configuration
 
-Example with env vars:
+You now have two ways:
+
+### 1) Inside Neovim plugin (recommended for multi-workspace)
+
+Add profiles:
+
+```vim
+:DbxProfileAdd dev https://adb-1234567890123456.7.azuredatabricks.net dapi_xxx
+:DbxProfileAdd prod https://adb-9999999999999999.7.azuredatabricks.net dapi_yyy
+```
+
+Switch active workspace:
+
+```vim
+:DbxProfileUse dev
+:DbxCatalogs
+```
+
+List/remove:
+
+```vim
+:DbxProfiles
+:DbxProfileRemove prod
+```
+
+Profiles are saved at:
+
+- `~/.local/share/nvim/databricks/profiles.json` (Linux)
+- `~/Library/Application Support/nvim/databricks/profiles.json` (macOS)
+
+> Note: tokens stored there are plaintext currently (MVP). Next step is keychain integration.
+
+### 2) Environment variables (single workspace quickstart)
+
+Put in your shell rc (`~/.zshrc`):
 
 ```bash
 export DATABRICKS_HOST="https://<workspace>.cloud.databricks.com"
 export DATABRICKS_TOKEN="dapi..."
 ```
 
-Optional quick test:
-
-```bash
-python3 python/dbx_bridge.py catalogs
-```
+Then restart shell / Neovim.
 
 ---
 
 ## Commands
+
+### Data exploration
 
 - `:DbxCatalogs`
 - `:DbxSchemas [catalog]`
 - `:DbxTables [catalog] [schema]`
 - `:DbxDescribe [catalog] [schema] [table]`
 
+### Profile management
+
+- `:DbxProfiles`
+- `:DbxProfileAdd <name> <host> [token] [sdk_profile]`
+- `:DbxProfileUse <name>`
+- `:DbxProfileRemove <name>`
+
 ---
 
 ## Roadmap
 
-- Workspace/profile switcher inside Neovim
+- Workspace profile picker UI
 - Query runner + preview UI
 - Notebook/cell execution on configured compute
 - Telescope integration
 - Async bridge calls (non-blocking UX)
+- OS keychain-backed secret storage
 
 ---
 
