@@ -104,6 +104,10 @@ function M.use_profile(name)
 end
 
 function M.remove_profile(name)
+  if not M.state.profiles[name] then
+    return false
+  end
+
   M.state.profiles[name] = nil
   if M.state.active_profile == name then
     M.state.active_profile = nil
@@ -113,6 +117,7 @@ function M.remove_profile(name)
     end
   end
   save_state()
+  return true
 end
 
 function M.resolve_auth_args()

@@ -17,6 +17,12 @@ local function split_args(s)
   return vim.split(s or "", "%s+", { trimempty = true })
 end
 
+local function profile_names()
+  local names = vim.tbl_keys(config.get_profiles())
+  table.sort(names)
+  return names
+end
+
 local function cmd_profiles()
   local profiles = config.get_profiles()
   local active = config.get_active_profile_name()
@@ -29,11 +35,11 @@ local function cmd_profiles()
 
   table.sort(rows)
   if #rows == 0 then
-    notify("No profiles configured. Use :DbxProfileAdd <name> <host> [token] [sdk_profile]")
+    notify("No workspaces configured. Use :DbxWorkspaceLogin", vim.log.levels.WARN)
     return
   end
 
-  ui.show_json("Databricks Profiles", rows, config.options.ui)
+  ui.show_json("Databricks Workspaces", rows, config.options.ui)
 end
 
 local function cmd_profile_add(args)
@@ -56,29 +62,99 @@ local function cmd_profile_add(args)
     token = token,
     sdk_profile = sdk_profile,
   })
-  notify("Saved profile: " .. name)
+  notify("Saved workspace: " .. name)
+end
+
+local function cmd_workspace_login(args)
+  local name = args[1] or ""
+  local host = args[2] or ""
+  local token = args[3] or ""
+  local sdk_profile = args[4] or ""
+
+  if name == "" then
+    name = vim.fn.input("Workspace name: ")
+  end
+  if name == "" then
+    notify("Workspace name is required", vim.log.levels.WARN)
+    return
+  end
+
+  if host == "" then
+    host = vim.fn.input("Workspace host URL: ")
+  end
+  if host == "" then
+    notify("Workspace host is required", vim.log.levels.WARN)
+    return
+  end
+
+  if token == "" then
+    token = vim.fn.inputsecret("Workspace token (optional): ")
+  end
+
+  if sdk_profile == "" then
+    sdk_profile = vim.fn.input("SDK profile name (optional): ")
+  end
+
+  config.add_profile(name, {
+    host = host,
+    token = token,
+    sdk_profile = sdk_profile,
+  })
+  config.use_profile(name)
+  notify("Workspace saved and selected: " .. name)
 end
 
 local function cmd_profile_use(name)
   if not name or name == "" then
-    notify("Usage: :DbxProfileUse <name>", vim.log.levels.WARN)
+    local names = profile_names()
+    if #names == 0 then
+      notify("No workspaces configured. Use :DbxWorkspaceLogin", vim.log.levels.WARN)
+      return
+    end
+
+    ui.select(names, function(item)
+      return item
+    end, function(choice)
+      config.use_profile(choice)
+      notify("Active workspace: " .. choice)
+    end, "Select Databricks workspace")
     return
   end
 
   if config.use_profile(name) then
-    notify("Active profile: " .. name)
+    notify("Active workspace: " .. name)
   else
-    notify("Profile not found: " .. name, vim.log.levels.ERROR)
+    notify("Workspace not found: " .. name, vim.log.levels.ERROR)
   end
 end
 
 local function cmd_profile_remove(name)
   if not name or name == "" then
-    notify("Usage: :DbxProfileRemove <name>", vim.log.levels.WARN)
+    local names = profile_names()
+    if #names == 0 then
+      notify("No workspaces to delete", vim.log.levels.WARN)
+      return
+    end
+
+    ui.select(names, function(item)
+      return item
+    end, function(choice)
+      local ok = config.remove_profile(choice)
+      if ok then
+        notify("Removed workspace: " .. choice)
+      else
+        notify("Workspace not found: " .. choice, vim.log.levels.ERROR)
+      end
+    end, "Delete Databricks workspace")
     return
   end
-  config.remove_profile(name)
-  notify("Removed profile: " .. name)
+
+  local ok = config.remove_profile(name)
+  if ok then
+    notify("Removed workspace: " .. name)
+  else
+    notify("Workspace not found: " .. name, vim.log.levels.ERROR)
+  end
 end
 
 local function cmd_catalogs()
@@ -185,6 +261,7 @@ local function create_commands()
     cmd_describe(args[1] or "", args[2] or "", args[3] or "")
   end, { nargs = "*" })
 
+  -- Profile commands (kept for compatibility)
   vim.api.nvim_create_user_command("DbxProfiles", function()
     cmd_profiles()
   end, {})
@@ -195,15 +272,28 @@ local function create_commands()
 
   vim.api.nvim_create_user_command("DbxProfileUse", function(opts)
     cmd_profile_use(opts.args)
-  end, { nargs = 1, complete = function()
-    return vim.tbl_keys(config.get_profiles())
-  end })
+  end, { nargs = "?", complete = profile_names })
 
   vim.api.nvim_create_user_command("DbxProfileRemove", function(opts)
     cmd_profile_remove(opts.args)
-  end, { nargs = 1, complete = function()
-    return vim.tbl_keys(config.get_profiles())
-  end })
+  end, { nargs = "?", complete = profile_names })
+
+  -- Workspace aliases (preferred UX)
+  vim.api.nvim_create_user_command("DbxWorkspaces", function()
+    cmd_profiles()
+  end, {})
+
+  vim.api.nvim_create_user_command("DbxWorkspaceLogin", function(opts)
+    cmd_workspace_login(split_args(opts.args))
+  end, { nargs = "*" })
+
+  vim.api.nvim_create_user_command("DbxWorkspaceUse", function(opts)
+    cmd_profile_use(opts.args)
+  end, { nargs = "?", complete = profile_names })
+
+  vim.api.nvim_create_user_command("DbxWorkspaceDelete", function(opts)
+    cmd_profile_remove(opts.args)
+  end, { nargs = "?", complete = profile_names })
 end
 
 function M.setup(opts)
