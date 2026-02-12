@@ -27,13 +27,12 @@ All from Neovim commands/UI.
 - [`uv`](https://docs.astral.sh/uv/) (recommended)
 - [`databricks-sdk`](https://pypi.org/project/databricks-sdk/)
 
-Install Python dependency with `uv`:
+Install Python dependency with `uv` (project-first):
 
 ```bash
-uv tool install --with databricks-sdk databricks-sdk
-# OR project-local:
-uv venv
-uv pip install databricks-sdk
+uv add databricks-sdk
+# or if you don't manage project deps yet:
+uv run --with databricks-sdk python -c "import databricks.sdk; print('ok')"
 ```
 
 If you prefer pip:
@@ -51,7 +50,16 @@ python3 -m pip install --user databricks-sdk
   "SergioGhisler/databricks-nvim",
   config = function()
     require("databricks").setup({
-      python = "python3", -- or path to uv-managed python
+      -- Option A: regular python
+      -- python = "python3",
+
+      -- Option B (recommended): uv-powered runtime
+      python = "uv", -- enables `uv run`
+      uv = {
+        enabled = true,
+        with = { "databricks-sdk" },
+      },
+
       bridge_script = vim.fn.stdpath("data") .. "/lazy/databricks-nvim/python/dbx_bridge.py",
       ui = {
         border = "rounded",
@@ -66,6 +74,16 @@ python3 -m pip install --user databricks-sdk
 If you install to a custom path, set `bridge_script` accordingly.
 
 ---
+
+### UV "magic mode"
+
+If `python = "uv"` (or `uv.enabled = true`), the plugin runs bridge calls as:
+
+```bash
+uv run --with databricks-sdk python <bridge_script> ...
+```
+
+So you can just have `uv` installed and it will bootstrap runtime deps automatically.
 
 ## Auth / Workspace configuration
 

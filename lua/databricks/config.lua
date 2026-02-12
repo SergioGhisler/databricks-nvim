@@ -4,6 +4,10 @@ M.defaults = {
   python = "python3",
   bridge_script = nil,
   profile = nil,
+  uv = {
+    enabled = false,
+    with = { "databricks-sdk" },
+  },
   ui = {
     border = "rounded",
     width = 0.7,
