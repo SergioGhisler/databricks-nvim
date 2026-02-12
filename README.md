@@ -2,7 +2,7 @@
 
 Neovim plugin for Databricks workflows without leaving Neovim.
 
-> Current stage: MVP+ (catalog/schema/table exploration + table describe + multi-workspace profiles)
+> Current stage: MVP+ (catalog/schema/table exploration + table describe + multi-workspace login/select/delete)
 
 ---
 
@@ -12,7 +12,8 @@ Neovim plugin for Databricks workflows without leaving Neovim.
 - `:DbxSchemas [catalog]` → list schemas
 - `:DbxTables [catalog] [schema]` → list tables
 - `:DbxDescribe [catalog] [schema] [table]` → float with table metadata
-- `:DbxProfileAdd / :DbxProfiles / :DbxProfileUse / :DbxProfileRemove`
+- `:DbxWorkspaceLogin / :DbxWorkspaces / :DbxWorkspaceUse / :DbxWorkspaceDelete`
+- Profile commands are still available as compatibility aliases
 
 All from Neovim commands/UI.
 
@@ -71,25 +72,27 @@ You now have two ways:
 
 ### 1) Inside Neovim plugin (recommended for multi-workspace)
 
-Add profiles:
+Create/login workspace (interactive):
 
 ```vim
-:DbxProfileAdd dev https://adb-1234567890123456.7.azuredatabricks.net dapi_xxx
-:DbxProfileAdd prod https://adb-9999999999999999.7.azuredatabricks.net dapi_yyy
+:DbxWorkspaceLogin
 ```
 
-Switch active workspace:
+Or provide args directly:
 
 ```vim
-:DbxProfileUse dev
-:DbxCatalogs
+:DbxWorkspaceLogin dev https://adb-1234567890123456.7.azuredatabricks.net dapi_xxx
+:DbxWorkspaceLogin prod https://adb-9999999999999999.7.azuredatabricks.net dapi_yyy
 ```
 
-List/remove:
+List / switch / delete workspace:
 
 ```vim
-:DbxProfiles
-:DbxProfileRemove prod
+:DbxWorkspaces
+:DbxWorkspaceUse
+:DbxWorkspaceUse dev
+:DbxWorkspaceDelete
+:DbxWorkspaceDelete prod
 ```
 
 Profiles are saved at:
@@ -121,12 +124,19 @@ Then restart shell / Neovim.
 - `:DbxTables [catalog] [schema]`
 - `:DbxDescribe [catalog] [schema] [table]`
 
-### Profile management
+### Workspace management (preferred)
+
+- `:DbxWorkspaces`
+- `:DbxWorkspaceLogin [name] [host] [token] [sdk_profile]`
+- `:DbxWorkspaceUse [name]`
+- `:DbxWorkspaceDelete [name]`
+
+### Profile aliases (backward compatible)
 
 - `:DbxProfiles`
 - `:DbxProfileAdd <name> <host> [token] [sdk_profile]`
-- `:DbxProfileUse <name>`
-- `:DbxProfileRemove <name>`
+- `:DbxProfileUse [name]`
+- `:DbxProfileRemove [name]`
 
 ---
 
