@@ -16,6 +16,15 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 const trackedAgents = ['main', 'dev-bot', 'research-bot', 'ops-bot', 'clyde'];
 const sessionToAgent = new Map();
 
+const ACTIVE_RUN_BUSY_WINDOW_MS = 20_000;
+const ACTIVE_RUN_THINKING_WINDOW_MS = 90_000;
+const TOOL_WINDOW_MS = 12_000;
+const POLL_FRESH_WINDOW_MS = 12_000;
+
+const runtimeState = new Map(
+  trackedAgents.map((agentId) => [agentId, { lastRunStartAt: 0, lastRunEndAt: 0, lastToolAt: 0 }]),
+);
+
 const state = {
   agents: Object.fromEntries(
     trackedAgents.map((name) => [
@@ -31,14 +40,6 @@ const state = {
   ),
   events: [],
 };
-
-const BUSY_MAX_AGE_MS = 18_000;
-const THINKING_MAX_AGE_MS = 42_000;
-const THINKING_PROMOTION_POLLS = 2;
-
-const statusSmoothing = new Map(
-  trackedAgents.map((agentId) => [agentId, { stable: 'idle', pending: null, count: 0 }]),
-);
 
 function broadcast(payload) {
   const msg = JSON.stringify(payload);
@@ -74,56 +75,6 @@ function applyAgentUpdate(agentId, patch) {
   }
 }
 
-function statusFromAgeMs(ageMs) {
-  if (ageMs <= BUSY_MAX_AGE_MS) return 'busy';
-  if (ageMs <= THINKING_MAX_AGE_MS) return 'thinking';
-  return 'idle';
-}
-
-function smoothPolledStatus(agentId, rawStatus) {
-  const slot = statusSmoothing.get(agentId) || { stable: 'idle', pending: null, count: 0 };
-
-  if (rawStatus === 'busy' || rawStatus === 'running_tool') {
-    slot.stable = rawStatus;
-    slot.pending = null;
-    slot.count = 0;
-    statusSmoothing.set(agentId, slot);
-    return slot.stable;
-  }
-
-  if (rawStatus === 'thinking') {
-    if (slot.stable === 'thinking' || slot.stable === 'busy') {
-      slot.stable = 'thinking';
-      slot.pending = null;
-      slot.count = 0;
-      statusSmoothing.set(agentId, slot);
-      return slot.stable;
-    }
-
-    if (slot.pending === 'thinking') slot.count += 1;
-    else {
-      slot.pending = 'thinking';
-      slot.count = 1;
-    }
-
-    if (slot.count >= THINKING_PROMOTION_POLLS) {
-      slot.stable = 'thinking';
-      slot.pending = null;
-      slot.count = 0;
-    }
-
-    statusSmoothing.set(agentId, slot);
-    return slot.stable;
-  }
-
-  // idle
-  slot.stable = 'idle';
-  slot.pending = null;
-  slot.count = 0;
-  statusSmoothing.set(agentId, slot);
-  return slot.stable;
-}
-
 function sessionStorePath(agentId) {
   return path.join(process.env.HOME || '', '.openclaw', 'agents', agentId, 'sessions', 'sessions.json');
 }
@@ -142,6 +93,28 @@ function readSessionsForStore(storePath) {
   }
 }
 
+function deriveStatus(agentId, pollAgeMs) {
+  const now = Date.now();
+  const rt = runtimeState.get(agentId) || { lastRunStartAt: 0, lastRunEndAt: 0, lastToolAt: 0 };
+
+  if (now - rt.lastToolAt <= TOOL_WINDOW_MS) {
+    return 'running_tool';
+  }
+
+  const hasActiveRun = rt.lastRunStartAt > rt.lastRunEndAt;
+  if (hasActiveRun) {
+    const runAge = now - rt.lastRunStartAt;
+    if (runAge <= ACTIVE_RUN_BUSY_WINDOW_MS) return 'busy';
+    if (runAge <= ACTIVE_RUN_THINKING_WINDOW_MS) return 'thinking';
+  }
+
+  if (pollAgeMs <= POLL_FRESH_WINDOW_MS) {
+    return 'busy';
+  }
+
+  return 'idle';
+}
+
 function updateFromOpenClaw() {
   sessionToAgent.clear();
 
@@ -154,8 +127,7 @@ function updateFromOpenClaw() {
 
     if (sessions.length === 0) {
       applyAgentUpdate(agentId, {
-        status: smoothPolledStatus(agentId, 'idle'),
-        rawStatus: 'idle',
+        status: deriveStatus(agentId, Number.POSITIVE_INFINITY),
         task: 'No active session yet',
         source: 'poll',
       });
@@ -166,12 +138,8 @@ function updateFromOpenClaw() {
     const latest = sessions[sessions.length - 1];
     const ageMs = latest.ageMs ?? Math.max(0, Date.now() - (latest.updatedAt || Date.now()));
 
-    const rawStatus = statusFromAgeMs(ageMs);
-    const status = smoothPolledStatus(agentId, rawStatus);
-
     applyAgentUpdate(agentId, {
-      status,
-      rawStatus,
+      status: deriveStatus(agentId, ageMs),
       task: `${latest.kind || 'session'} · ${latest.key || 'n/a'}`,
       model: latest.model || '',
       updatedAt: new Date(latest.updatedAt || Date.now()).toISOString(),
@@ -179,6 +147,16 @@ function updateFromOpenClaw() {
       source: 'poll',
     });
   }
+}
+
+function inferAgentIdFromMessage(msg) {
+  const direct = msg.match(/agent:([a-z0-9-]+):/i)?.[1];
+  if (direct && trackedAgents.includes(direct)) return direct;
+
+  const sid = msg.match(/sessionId=([a-f0-9-]+)/i)?.[1];
+  if (sid && sessionToAgent.has(sid)) return sessionToAgent.get(sid);
+
+  return 'main';
 }
 
 function parseLogLine(line) {
@@ -190,12 +168,13 @@ function parseLogLine(line) {
   }
 
   const msg = String(obj?.message || '');
+  const agentId = inferAgentIdFromMessage(msg);
+  const rt = runtimeState.get(agentId) || { lastRunStartAt: 0, lastRunEndAt: 0, lastToolAt: 0 };
 
-  // Fast status raise on run start (near real-time)
-  if (msg.includes('embedded run start:')) {
-    const sid = msg.match(/sessionId=([a-f0-9-]+)/i)?.[1];
+  if (msg.includes('embedded run start:') || msg.includes(' run start')) {
+    rt.lastRunStartAt = Date.now();
+    runtimeState.set(agentId, rt);
     const model = msg.match(/model=([^\s]+)/i)?.[1] || '';
-    const agentId = sid ? sessionToAgent.get(sid) || 'main' : 'main';
     applyAgentUpdate(agentId, {
       status: 'busy',
       task: 'Active run',
@@ -205,18 +184,25 @@ function parseLogLine(line) {
     return;
   }
 
-  // Elevate on explicit tool traffic markers if present
+  if (msg.includes('embedded run end:') || msg.includes(' run end') || msg.includes('stopReason=')) {
+    rt.lastRunEndAt = Date.now();
+    runtimeState.set(agentId, rt);
+    applyAgentUpdate(agentId, {
+      status: 'idle',
+      task: 'Idle',
+      source: 'events',
+    });
+    return;
+  }
+
   if (msg.includes('tool') && msg.includes('runId=')) {
-    for (const agentId of trackedAgents) {
-      if (msg.includes(`agent:${agentId}:`)) {
-        applyAgentUpdate(agentId, {
-          status: 'running_tool',
-          task: 'Running tool call',
-          source: 'events',
-        });
-        break;
-      }
-    }
+    rt.lastToolAt = Date.now();
+    runtimeState.set(agentId, rt);
+    applyAgentUpdate(agentId, {
+      status: 'running_tool',
+      task: 'Running tool call',
+      source: 'events',
+    });
   }
 }
 
@@ -246,6 +232,10 @@ app.get('/health', (_req, res) => {
 
 app.get('/api/state', (_req, res) => {
   res.json(state);
+});
+
+app.get('/api/employee-status', (_req, res) => {
+  res.json({ agents: state.agents, events: state.events });
 });
 
 app.post('/api/agent/:name', (req, res) => {
