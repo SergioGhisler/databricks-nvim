@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
-const WS_URL = 'ws://localhost:8787/ws'
-const API_URL = 'http://localhost:8787/api/state'
+const host = window.location.hostname
+const WS_URL = `ws://${host}:8787/ws`
+const API_URL = `http://${host}:8787/api/state`
 
 const statusColor = {
   idle: '#22c55e',
