@@ -35,6 +35,7 @@ function App() {
   const [events, setEvents] = useState([])
   const [connected, setConnected] = useState(false)
   const [selected, setSelected] = useState('main')
+  const [hoveredAgent, setHoveredAgent] = useState(null)
 
   useEffect(() => {
     fetch(API_URL)
@@ -86,6 +87,24 @@ function App() {
     return map
   }, [events])
 
+  const recentEventsByAgent = useMemo(() => {
+    const map = {}
+    for (const e of events) {
+      const payload = e?.data || e || {}
+      const name = payload?.name
+      if (!name) continue
+      if (!map[name]) map[name] = []
+      if (map[name].length < 3) {
+        map[name].push({
+          status: payload?.status || 'idle',
+          task: payload?.task || '',
+          at: e?.at || e?.updatedAt || payload?.updatedAt,
+        })
+      }
+    }
+    return map
+  }, [events])
+
   return (
     <div className="page">
       <header className="header">
@@ -100,19 +119,47 @@ function App() {
             {agentList.map(([name, agent]) => {
               const pos = officeSlots[name] || { left: '50%', top: '50%' }
               const hover = latestEventByAgent[name] || agent
-              const tooltip = `${name}\nstatus: ${hover.status || 'idle'}\nmodel: ${hover.model || 'n/a'}\ntask: ${hover.task || 'n/a'}`
+              const isHovered = hoveredAgent === name
+              const agentEvents = recentEventsByAgent[name] || []
               return (
-                <button
+                <div
                   key={name}
-                  className={`office-agent ${selected === name ? 'selected' : ''}`}
-                  style={{ left: pos.left, top: pos.top, borderColor: statusColor[agent.status] || '#64748b' }}
-                  onClick={() => setSelected(name)}
-                  title={tooltip}
+                  className="office-agent-wrap"
+                  style={{ left: pos.left, top: pos.top }}
+                  onMouseEnter={() => setHoveredAgent(name)}
+                  onMouseLeave={() => setHoveredAgent((prev) => (prev === name ? null : prev))}
                 >
-                  <span className="dot" style={{ background: statusColor[agent.status] || '#94a3b8' }} />
-                  <strong>{name}</strong>
-                  <small>{agent.status}</small>
-                </button>
+                  <button
+                    className={`office-agent ${selected === name ? 'selected' : ''}`}
+                    style={{ borderColor: statusColor[agent.status] || '#64748b' }}
+                    onClick={() => setSelected(name)}
+                    onFocus={() => setHoveredAgent(name)}
+                    onBlur={() => setHoveredAgent((prev) => (prev === name ? null : prev))}
+                    aria-label={`Agent ${name}`}
+                  >
+                    <span className="dot" style={{ background: statusColor[agent.status] || '#94a3b8' }} />
+                    <strong>{name}</strong>
+                    <small>{agent.status}</small>
+                  </button>
+
+                  {isHovered && (
+                    <div className="agent-popover" role="tooltip">
+                      <h3>{name}</h3>
+                      <p><b>Status:</b> {hover.status || 'idle'}</p>
+                      <p><b>Model:</b> {hover.model || 'n/a'}</p>
+                      <p><b>Task:</b> {hover.task || 'n/a'}</p>
+                      <p><b>Recent events:</b></p>
+                      <ul>
+                        {agentEvents.length > 0 ? agentEvents.map((item, idx) => (
+                          <li key={`${name}-${idx}`}>
+                            <span>{item.status} · {item.task || 'n/a'}</span>
+                            <small>{item.at ? new Date(item.at).toLocaleTimeString() : 'n/a'}</small>
+                          </li>
+                        )) : <li><span>none</span></li>}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>

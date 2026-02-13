@@ -32,6 +32,14 @@ const state = {
   events: [],
 };
 
+const BUSY_MAX_AGE_MS = 18_000;
+const THINKING_MAX_AGE_MS = 42_000;
+const THINKING_PROMOTION_POLLS = 2;
+
+const statusSmoothing = new Map(
+  trackedAgents.map((agentId) => [agentId, { stable: 'idle', pending: null, count: 0 }]),
+);
+
 function broadcast(payload) {
   const msg = JSON.stringify(payload);
   for (const client of wss.clients) {
@@ -67,9 +75,53 @@ function applyAgentUpdate(agentId, patch) {
 }
 
 function statusFromAgeMs(ageMs) {
-  if (ageMs <= 30_000) return 'busy';
-  if (ageMs <= 120_000) return 'thinking';
+  if (ageMs <= BUSY_MAX_AGE_MS) return 'busy';
+  if (ageMs <= THINKING_MAX_AGE_MS) return 'thinking';
   return 'idle';
+}
+
+function smoothPolledStatus(agentId, rawStatus) {
+  const slot = statusSmoothing.get(agentId) || { stable: 'idle', pending: null, count: 0 };
+
+  if (rawStatus === 'busy' || rawStatus === 'running_tool') {
+    slot.stable = rawStatus;
+    slot.pending = null;
+    slot.count = 0;
+    statusSmoothing.set(agentId, slot);
+    return slot.stable;
+  }
+
+  if (rawStatus === 'thinking') {
+    if (slot.stable === 'thinking' || slot.stable === 'busy') {
+      slot.stable = 'thinking';
+      slot.pending = null;
+      slot.count = 0;
+      statusSmoothing.set(agentId, slot);
+      return slot.stable;
+    }
+
+    if (slot.pending === 'thinking') slot.count += 1;
+    else {
+      slot.pending = 'thinking';
+      slot.count = 1;
+    }
+
+    if (slot.count >= THINKING_PROMOTION_POLLS) {
+      slot.stable = 'thinking';
+      slot.pending = null;
+      slot.count = 0;
+    }
+
+    statusSmoothing.set(agentId, slot);
+    return slot.stable;
+  }
+
+  // idle
+  slot.stable = 'idle';
+  slot.pending = null;
+  slot.count = 0;
+  statusSmoothing.set(agentId, slot);
+  return slot.stable;
 }
 
 function sessionStorePath(agentId) {
@@ -102,7 +154,8 @@ function updateFromOpenClaw() {
 
     if (sessions.length === 0) {
       applyAgentUpdate(agentId, {
-        status: 'idle',
+        status: smoothPolledStatus(agentId, 'idle'),
+        rawStatus: 'idle',
         task: 'No active session yet',
         source: 'poll',
       });
@@ -113,8 +166,12 @@ function updateFromOpenClaw() {
     const latest = sessions[sessions.length - 1];
     const ageMs = latest.ageMs ?? Math.max(0, Date.now() - (latest.updatedAt || Date.now()));
 
+    const rawStatus = statusFromAgeMs(ageMs);
+    const status = smoothPolledStatus(agentId, rawStatus);
+
     applyAgentUpdate(agentId, {
-      status: statusFromAgeMs(ageMs),
+      status,
+      rawStatus,
       task: `${latest.kind || 'session'} · ${latest.key || 'n/a'}`,
       model: latest.model || '',
       updatedAt: new Date(latest.updatedAt || Date.now()).toISOString(),

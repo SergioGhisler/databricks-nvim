@@ -26,9 +26,12 @@ h2 { margin: 0 0 10px; font-size: 1rem; }
   background-size: 30px 30px;
 }
 
-.office-agent {
+.office-agent-wrap {
   position: absolute;
   transform: translate(-50%, -50%);
+}
+
+.office-agent {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -44,6 +47,53 @@ h2 { margin: 0 0 10px; font-size: 1rem; }
 .office-agent.selected { box-shadow: 0 0 0 2px #60a5fa66; }
 .office-agent .dot { width: 8px; height: 8px; border-radius: 999px; }
 .office-agent small { color: #a3a3a3; }
+
+.agent-popover {
+  position: absolute;
+  z-index: 15;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 280px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #334155;
+  background: #0b1328;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.agent-popover h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.agent-popover p {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: #d1d5db;
+}
+
+.agent-popover ul {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.agent-popover li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.agent-popover small {
+  color: #94a3b8;
+  white-space: nowrap;
+}
 
 .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; color: #a3a3a3; font-size: 12px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
