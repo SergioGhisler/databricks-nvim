@@ -14,10 +14,19 @@ const statusColor = {
   done: '#14b8a6',
 }
 
+const officeSlots = {
+  main: { left: '20%', top: '20%' },
+  'dev-bot': { left: '70%', top: '25%' },
+  'research-bot': { left: '30%', top: '68%' },
+  'ops-bot': { left: '75%', top: '70%' },
+  clyde: { left: '50%', top: '45%' },
+}
+
 function App() {
   const [agents, setAgents] = useState({})
   const [events, setEvents] = useState([])
   const [connected, setConnected] = useState(false)
+  const [selected, setSelected] = useState('main')
 
   useEffect(() => {
     fetch(API_URL)
@@ -48,40 +57,58 @@ function App() {
   }, [])
 
   const agentList = useMemo(() => Object.entries(agents), [agents])
+  const selectedAgent = agents[selected]
 
   return (
     <div className="page">
       <header className="header">
         <h1>OpenClaw Mission Control</h1>
-        <span className={connected ? 'pill ok' : 'pill err'}>
-          {connected ? 'Live' : 'Disconnected'}
-        </span>
+        <span className={connected ? 'pill ok' : 'pill err'}>{connected ? 'Live' : 'Disconnected'}</span>
       </header>
 
-      <main className="grid">
-        <section className="panel">
-          <h2>Agents</h2>
-          <div className="agents">
-            {agentList.map(([name, a]) => (
-              <article key={name} className="agent-card">
-                <div className="row">
+      <main className="layout">
+        <section className="panel office-panel">
+          <h2>Office</h2>
+          <div className="office-room">
+            {agentList.map(([name, agent]) => {
+              const pos = officeSlots[name] || { left: '50%', top: '50%' }
+              return (
+                <button
+                  key={name}
+                  className={`office-agent ${selected === name ? 'selected' : ''}`}
+                  style={{ left: pos.left, top: pos.top, borderColor: statusColor[agent.status] || '#64748b' }}
+                  onClick={() => setSelected(name)}
+                >
+                  <span className="dot" style={{ background: statusColor[agent.status] || '#94a3b8' }} />
                   <strong>{name}</strong>
-                  <span className="dot" style={{ background: statusColor[a.status] || '#94a3b8' }} />
-                </div>
-                <div className="meta">{a.status}</div>
-                <div className="task">{a.task}</div>
-                <div className="meta">{new Date(a.updatedAt).toLocaleTimeString()}</div>
-              </article>
+                  <small>{agent.status}</small>
+                </button>
+              )
+            })}
+          </div>
+          <div className="legend">
+            {Object.keys(statusColor).map((k) => (
+              <span key={k}><i style={{ background: statusColor[k] }} />{k}</span>
             ))}
           </div>
         </section>
 
-        <section className="panel">
+        <section className="panel side-panel">
+          <h2>{selected} details</h2>
+          {selectedAgent ? (
+            <>
+              <p><b>Status:</b> {selectedAgent.status}</p>
+              <p><b>Task:</b> {selectedAgent.task}</p>
+              <p><b>Updated:</b> {new Date(selectedAgent.updatedAt).toLocaleTimeString()}</p>
+            </>
+          ) : <p>No data yet.</p>}
+
           <h2>Activity</h2>
           <ul className="events">
-            {events.slice(0, 20).map((e) => (
+            {events.slice(0, 12).map((e) => (
               <li key={e.id || `${e.name}-${e.updatedAt}`}>
-                <b>{e.data?.name || e.name}</b> → {e.data?.status || e.status} <small>{new Date(e.at || e.updatedAt).toLocaleTimeString()}</small>
+                <b>{e.data?.name || e.name}</b> → {e.data?.status || e.status}
+                <small>{new Date(e.at || e.updatedAt).toLocaleTimeString()}</small>
               </li>
             ))}
           </ul>
