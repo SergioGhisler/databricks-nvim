@@ -22,8 +22,16 @@ const officeSlots = {
   clyde: { left: '50%', top: '45%' },
 }
 
+const bootstrapAgents = {
+  main: { status: 'idle', task: 'Booting...', updatedAt: new Date().toISOString() },
+  'dev-bot': { status: 'idle', task: 'Booting...', updatedAt: new Date().toISOString() },
+  'research-bot': { status: 'idle', task: 'Booting...', updatedAt: new Date().toISOString() },
+  'ops-bot': { status: 'idle', task: 'Booting...', updatedAt: new Date().toISOString() },
+  clyde: { status: 'idle', task: 'Booting...', updatedAt: new Date().toISOString() },
+}
+
 function App() {
-  const [agents, setAgents] = useState({})
+  const [agents, setAgents] = useState(bootstrapAgents)
   const [events, setEvents] = useState([])
   const [connected, setConnected] = useState(false)
   const [selected, setSelected] = useState('main')
@@ -43,13 +51,22 @@ function App() {
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data)
       if (msg.type === 'state.snapshot') {
-        setAgents(msg.data.agents || {})
-        setEvents(msg.data.events || [])
+        const nextAgents = msg?.data?.agents
+        const nextEvents = msg?.data?.events
+        if (nextAgents && Object.keys(nextAgents).length > 0) {
+          setAgents(nextAgents)
+        }
+        if (Array.isArray(nextEvents) && nextEvents.length >= 0) {
+          setEvents(nextEvents)
+        }
       }
       if (msg.type === 'agent.updated') {
-        const payload = msg.data
-        setAgents((prev) => ({ ...prev, [payload.name]: payload }))
-        setEvents((prev) => [msg.data, ...prev].slice(0, 100))
+        const event = msg.data || {}
+        const payload = event.data || event
+        if (payload?.name) {
+          setAgents((prev) => ({ ...prev, [payload.name]: payload }))
+        }
+        setEvents((prev) => [event, ...prev].slice(0, 100))
       }
     }
 
@@ -58,6 +75,16 @@ function App() {
 
   const agentList = useMemo(() => Object.entries(agents), [agents])
   const selectedAgent = agents[selected]
+
+  const latestEventByAgent = useMemo(() => {
+    const map = {}
+    for (const e of events) {
+      const payload = e?.data || e || {}
+      const name = payload?.name
+      if (name && !map[name]) map[name] = payload
+    }
+    return map
+  }, [events])
 
   return (
     <div className="page">
@@ -72,12 +99,15 @@ function App() {
           <div className="office-room">
             {agentList.map(([name, agent]) => {
               const pos = officeSlots[name] || { left: '50%', top: '50%' }
+              const hover = latestEventByAgent[name] || agent
+              const tooltip = `${name}\nstatus: ${hover.status || 'idle'}\nmodel: ${hover.model || 'n/a'}\ntask: ${hover.task || 'n/a'}`
               return (
                 <button
                   key={name}
                   className={`office-agent ${selected === name ? 'selected' : ''}`}
                   style={{ left: pos.left, top: pos.top, borderColor: statusColor[agent.status] || '#64748b' }}
                   onClick={() => setSelected(name)}
+                  title={tooltip}
                 >
                   <span className="dot" style={{ background: statusColor[agent.status] || '#94a3b8' }} />
                   <strong>{name}</strong>
