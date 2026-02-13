@@ -44,7 +44,8 @@ const roomLabels = [
   { x: 560, y: 32, text: 'KITCHEN' },
 ]
 
-const workingStates = new Set(['busy', 'thinking', 'running_tool'])
+const seatedStates = new Set(['working', 'busy', 'running_tool'])
+const thinkingStates = new Set(['thinking'])
 
 function App() {
   const canvasRef = useRef(null)
@@ -130,11 +131,13 @@ function App() {
           next[name] = {
             x: 820 + (i % 2) * 80,
             y: 200 + i * 55,
-            tx: desk.x,
-            ty: desk.y + 42,
+            tx: 760 + Math.random() * 280,
+            ty: 190 + Math.random() * 320,
             step: 0,
             lastStepAt: 0,
             wanderAt: Date.now(),
+            pauseUntil: 0,
+            prevStatus: 'idle',
           }
         }
       })
@@ -198,21 +201,52 @@ function App() {
 
     const drawAgent = (name, agent, anim, i, now) => {
       const desk = deskSlots[i % deskSlots.length]
-      const working = workingStates.has(agent.status)
-      if (working) {
+      const status = agent.status || 'idle'
+      const shouldSit = seatedStates.has(status)
+      const isThinking = thinkingStates.has(status)
+      const prevStatus = anim.prevStatus || 'idle'
+
+      if (status !== prevStatus) {
+        anim.prevStatus = status
+
+        // Immediate unseat for non-seated statuses.
+        if (!shouldSit) {
+          const nearDeskNow = Math.abs(anim.x - desk.x) < 18 && Math.abs(anim.y - (desk.y + 42)) < 16
+          if (nearDeskNow) {
+            anim.tx = desk.x + 50
+            anim.ty = desk.y + 56
+          }
+          anim.pauseUntil = 0
+        }
+      }
+
+      if (shouldSit) {
         anim.tx = desk.x
         anim.ty = desk.y + 42
-      } else if (now - anim.wanderAt > 2500) {
+      } else if (isThinking) {
+        // Thinking: stand and occasionally pause, but never sit.
+        if (!anim.pauseUntil && now - anim.wanderAt > 2100) {
+          anim.tx = 760 + Math.random() * 280
+          anim.ty = 190 + Math.random() * 320
+          anim.wanderAt = now
+          anim.pauseUntil = now + 700 + Math.random() * 900
+        }
+        if (anim.pauseUntil && now >= anim.pauseUntil) {
+          anim.pauseUntil = 0
+        }
+      } else if (now - anim.wanderAt > 2200) {
         anim.tx = 760 + Math.random() * 280
         anim.ty = 190 + Math.random() * 320
         anim.wanderAt = now
+        anim.pauseUntil = 0
       }
 
       const dx = anim.tx - anim.x
       const dy = anim.ty - anim.y
       const dist = Math.hypot(dx, dy)
-      const speed = working ? 1.7 : 1.2
-      if (dist > 2) {
+      const pausedThinking = isThinking && anim.pauseUntil && now < anim.pauseUntil
+      const speed = shouldSit ? 1.7 : 1.2
+      if (dist > 2 && !pausedThinking) {
         anim.x += (dx / dist) * speed
         anim.y += (dy / dist) * speed
       }
@@ -223,7 +257,7 @@ function App() {
       }
 
       const nearDesk = Math.abs(anim.x - desk.x) < 14 && Math.abs(anim.y - (desk.y + 42)) < 12
-      const sitting = working && nearDesk
+      const sitting = shouldSit && nearDesk
 
       const body = ['#f97316', '#38bdf8', '#a78bfa', '#34d399', '#f43f5e'][i % 5]
       const x = Math.round(anim.x)
