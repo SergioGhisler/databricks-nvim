@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 const host = window.location.hostname
 const WS_URL = `ws://${host}:8787/ws`
-const API_URL = `http://${host}:8787/api/state`
+const API_URL = `http://${host}:8787/api/employee-status`
+
+const CANVAS_W = 1100
+const CANVAS_H = 720
 
 const statusColor = {
   idle: '#22c55e',
@@ -14,37 +17,58 @@ const statusColor = {
   done: '#14b8a6',
 }
 
-const officeSlots = {
-  main: { left: '20%', top: '20%' },
-  'dev-bot': { left: '70%', top: '25%' },
-  'research-bot': { left: '30%', top: '68%' },
-  'ops-bot': { left: '75%', top: '70%' },
-  clyde: { left: '50%', top: '45%' },
+const bootstrapAgents = {
+  main: { status: 'idle', task: 'Waiting', updatedAt: new Date().toISOString(), model: '' },
+  'dev-bot': { status: 'idle', task: 'Waiting', updatedAt: new Date().toISOString(), model: '' },
+  'research-bot': { status: 'idle', task: 'Waiting', updatedAt: new Date().toISOString(), model: '' },
+  'ops-bot': { status: 'idle', task: 'Waiting', updatedAt: new Date().toISOString(), model: '' },
+  clyde: { status: 'idle', task: 'Waiting', updatedAt: new Date().toISOString(), model: '' },
 }
 
-const bootstrapAgents = {
-  main: { status: 'idle', task: 'Booting...', updatedAt: new Date().toISOString() },
-  'dev-bot': { status: 'idle', task: 'Booting...', updatedAt: new Date().toISOString() },
-  'research-bot': { status: 'idle', task: 'Booting...', updatedAt: new Date().toISOString() },
-  'ops-bot': { status: 'idle', task: 'Booting...', updatedAt: new Date().toISOString() },
-  clyde: { status: 'idle', task: 'Booting...', updatedAt: new Date().toISOString() },
-}
+const deskSlots = [
+  { x: 110, y: 250 },
+  { x: 250, y: 250 },
+  { x: 390, y: 250 },
+  { x: 530, y: 250 },
+  { x: 110, y: 430 },
+  { x: 250, y: 430 },
+  { x: 390, y: 430 },
+  { x: 530, y: 430 },
+]
+
+const uniqueItems = ['☕', '📚', '🦆', '🎧', '🧪', '🕹', '🧠', '🚀']
+
+const roomLabels = [
+  { x: 80, y: 32, text: 'CONFERENCE' },
+  { x: 320, y: 32, text: 'BOSS OFFICE' },
+  { x: 560, y: 32, text: 'KITCHEN' },
+]
+
+const workingStates = new Set(['busy', 'thinking', 'running_tool'])
 
 function App() {
+  const canvasRef = useRef(null)
+  const animRef = useRef(null)
+  const agentsAnimRef = useRef({})
+
   const [agents, setAgents] = useState(bootstrapAgents)
   const [events, setEvents] = useState([])
   const [connected, setConnected] = useState(false)
-  const [selected, setSelected] = useState('main')
-  const [hoveredAgent, setHoveredAgent] = useState(null)
+  const [hover, setHover] = useState(null)
 
   useEffect(() => {
-    fetch(API_URL)
-      .then((r) => r.json())
-      .then((data) => {
-        setAgents(data.agents || {})
-        setEvents(data.events || [])
-      })
-      .catch(() => {})
+    const pull = () => {
+      fetch(API_URL)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.agents) setAgents(data.agents)
+          if (Array.isArray(data?.events)) setEvents(data.events)
+        })
+        .catch(() => {})
+    }
+
+    pull()
+    const timer = setInterval(pull, 5000)
 
     const ws = new WebSocket(WS_URL)
     ws.onopen = () => setConnected(true)
@@ -52,14 +76,8 @@ function App() {
     ws.onmessage = (ev) => {
       const msg = JSON.parse(ev.data)
       if (msg.type === 'state.snapshot') {
-        const nextAgents = msg?.data?.agents
-        const nextEvents = msg?.data?.events
-        if (nextAgents && Object.keys(nextAgents).length > 0) {
-          setAgents(nextAgents)
-        }
-        if (Array.isArray(nextEvents) && nextEvents.length >= 0) {
-          setEvents(nextEvents)
-        }
+        if (msg?.data?.agents) setAgents(msg.data.agents)
+        if (Array.isArray(msg?.data?.events)) setEvents(msg.data.events)
       }
       if (msg.type === 'agent.updated') {
         const event = msg.data || {}
@@ -67,25 +85,17 @@ function App() {
         if (payload?.name) {
           setAgents((prev) => ({ ...prev, [payload.name]: payload }))
         }
-        setEvents((prev) => [event, ...prev].slice(0, 100))
+        setEvents((prev) => [event, ...prev].slice(0, 200))
       }
     }
 
-    return () => ws.close()
+    return () => {
+      clearInterval(timer)
+      ws.close()
+    }
   }, [])
 
   const agentList = useMemo(() => Object.entries(agents), [agents])
-  const selectedAgent = agents[selected]
-
-  const latestEventByAgent = useMemo(() => {
-    const map = {}
-    for (const e of events) {
-      const payload = e?.data || e || {}
-      const name = payload?.name
-      if (name && !map[name]) map[name] = payload
-    }
-    return map
-  }, [events])
 
   const recentEventsByAgent = useMemo(() => {
     const map = {}
@@ -97,7 +107,7 @@ function App() {
       if (map[name].length < 3) {
         map[name].push({
           status: payload?.status || 'idle',
-          task: payload?.task || '',
+          task: payload?.task || 'n/a',
           at: e?.at || e?.updatedAt || payload?.updatedAt,
         })
       }
@@ -105,92 +115,223 @@ function App() {
     return map
   }, [events])
 
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    const initAgentAnim = () => {
+      const next = { ...agentsAnimRef.current }
+      agentList.forEach(([name], i) => {
+        const desk = deskSlots[i % deskSlots.length]
+        if (!next[name]) {
+          next[name] = {
+            x: 820 + (i % 2) * 80,
+            y: 200 + i * 55,
+            tx: desk.x,
+            ty: desk.y + 42,
+            step: 0,
+            lastStepAt: 0,
+            wanderAt: Date.now(),
+          }
+        }
+      })
+      agentsAnimRef.current = next
+    }
+
+    const drawRect = (x, y, w, h, c) => {
+      ctx.fillStyle = c
+      ctx.fillRect(x, y, w, h)
+    }
+
+    const drawStaticWorld = () => {
+      for (let y = 0; y < CANVAS_H - 70; y += 20) {
+        for (let x = 0; x < CANVAS_W; x += 20) {
+          const dark = ((x + y) / 20) % 2 === 0
+          drawRect(x, y, 20, 20, dark ? '#121212' : '#181818')
+        }
+      }
+
+      drawRect(0, 0, 700, 120, '#202020')
+      drawRect(20, 20, 200, 80, '#313131')
+      drawRect(250, 20, 200, 80, '#313131')
+      drawRect(480, 20, 200, 80, '#313131')
+      roomLabels.forEach((r) => {
+        ctx.fillStyle = '#e5e7eb'
+        ctx.font = '16px "JetBrains Mono", monospace'
+        ctx.fillText(r.text, r.x, r.y)
+      })
+
+      drawRect(20, 130, 650, 420, '#1c1c1c')
+      drawRect(330, 130, 30, 420, '#252525')
+      drawRect(20, 330, 650, 30, '#252525')
+
+      deskSlots.forEach((d, i) => {
+        drawRect(d.x - 40, d.y - 24, 80, 48, '#2e2e2e')
+        drawRect(d.x - 18, d.y - 18, 36, 20, '#0f172a')
+        drawRect(d.x - 15, d.y + 8, 30, 12, '#444')
+        drawRect(d.x + 24, d.y - 16, 10, 10, '#6b7280')
+        ctx.fillStyle = '#facc15'
+        ctx.font = '14px "JetBrains Mono", monospace'
+        ctx.fillText(uniqueItems[i], d.x + 22, d.y + 18)
+      })
+
+      drawRect(700, 40, 380, 510, '#1f2937')
+      drawRect(740, 90, 140, 44, '#6b21a8')
+      drawRect(900, 110, 90, 30, '#374151')
+      drawRect(1000, 80, 30, 70, '#60a5fa')
+      drawRect(760, 190, 40, 40, '#16a34a')
+      drawRect(820, 220, 40, 40, '#16a34a')
+      drawRect(920, 220, 120, 60, '#065f46')
+      drawRect(930, 230, 100, 40, '#0f766e')
+      drawRect(890, 320, 160, 95, '#f8fafc')
+
+      for (let i = 0; i < 12; i++) {
+        const px = 40 + (i * 88) % 1000
+        const py = 560 + (i % 3) * 24
+        drawRect(px, py, 12, 12, '#16a34a')
+        drawRect(px + 4, py + 10, 4, 10, '#166534')
+      }
+    }
+
+    const drawAgent = (name, agent, anim, i, now) => {
+      const desk = deskSlots[i % deskSlots.length]
+      const working = workingStates.has(agent.status)
+      if (working) {
+        anim.tx = desk.x
+        anim.ty = desk.y + 42
+      } else if (now - anim.wanderAt > 2500) {
+        anim.tx = 760 + Math.random() * 280
+        anim.ty = 190 + Math.random() * 320
+        anim.wanderAt = now
+      }
+
+      const dx = anim.tx - anim.x
+      const dy = anim.ty - anim.y
+      const dist = Math.hypot(dx, dy)
+      const speed = working ? 1.7 : 1.2
+      if (dist > 2) {
+        anim.x += (dx / dist) * speed
+        anim.y += (dy / dist) * speed
+      }
+
+      if (now - anim.lastStepAt > 260) {
+        anim.step = anim.step ? 0 : 1
+        anim.lastStepAt = now
+      }
+
+      const nearDesk = Math.abs(anim.x - desk.x) < 14 && Math.abs(anim.y - (desk.y + 42)) < 12
+      const sitting = working && nearDesk
+
+      const body = ['#f97316', '#38bdf8', '#a78bfa', '#34d399', '#f43f5e'][i % 5]
+      const x = Math.round(anim.x)
+      const y = Math.round(anim.y)
+
+      drawRect(x - 8, y - 36, 16, 10, '#f5d0a9')
+      drawRect(x - 10, y - 26, 20, 16, body)
+
+      if (sitting) {
+        drawRect(x - 10, y - 10, 20, 10, body)
+      } else {
+        const legOffset = anim.step ? 3 : 0
+        drawRect(x - 8, y - 10, 6, 12 + legOffset, '#334155')
+        drawRect(x + 2, y - 10, 6, 12 + (anim.step ? 0 : 3), '#334155')
+      }
+
+      ctx.fillStyle = '#e5e7eb'
+      ctx.font = '12px "JetBrains Mono", monospace'
+      ctx.fillText(name, x - 24, y - 44)
+
+      drawRect(x + 12, y - 36, 7, 7, statusColor[agent.status] || '#94a3b8')
+
+      anim.hitbox = { x: x - 12, y: y - 40, w: 26, h: 42, name }
+    }
+
+    const render = (now) => {
+      initAgentAnim()
+      ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)
+      drawStaticWorld()
+
+      agentList.forEach(([name, agent], i) => {
+        const anim = agentsAnimRef.current[name]
+        if (!anim) return
+        drawAgent(name, agent, anim, i, now)
+      })
+
+      drawRect(0, CANVAS_H - 70, CANVAS_W, 70, '#0b1220')
+      agentList.forEach(([name, agent], i) => {
+        const x = 16 + i * 210
+        drawRect(x, CANVAS_H - 56, 196, 40, '#111827')
+        drawRect(x + 8, CANVAS_H - 42, 10, 10, statusColor[agent.status] || '#94a3b8')
+        ctx.fillStyle = '#d1d5db'
+        ctx.font = '13px "JetBrains Mono", monospace'
+        ctx.fillText(`${name} · ${agent.status}`, x + 24, CANVAS_H - 32)
+      })
+
+      animRef.current = requestAnimationFrame(render)
+    }
+
+    animRef.current = requestAnimationFrame(render)
+
+    const onMove = (ev) => {
+      const rect = canvas.getBoundingClientRect()
+      const x = ((ev.clientX - rect.left) / rect.width) * CANVAS_W
+      const y = ((ev.clientY - rect.top) / rect.height) * CANVAS_H
+      const hit = Object.values(agentsAnimRef.current).find((a) => {
+        const h = a.hitbox
+        return h && x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h
+      })
+      if (hit?.name) {
+        const name = hit.name
+        setHover({
+          x: ev.clientX - rect.left,
+          y: ev.clientY - rect.top,
+          name,
+          agent: agents[name],
+          events: recentEventsByAgent[name] || [],
+        })
+      } else {
+        setHover(null)
+      }
+    }
+
+    const onLeave = () => setHover(null)
+    canvas.addEventListener('mousemove', onMove)
+    canvas.addEventListener('mouseleave', onLeave)
+
+    return () => {
+      if (animRef.current) cancelAnimationFrame(animRef.current)
+      canvas.removeEventListener('mousemove', onMove)
+      canvas.removeEventListener('mouseleave', onLeave)
+    }
+  }, [agentList, agents, recentEventsByAgent])
+
   return (
     <div className="page">
       <header className="header">
-        <h1>OpenClaw Mission Control</h1>
-        <span className={connected ? 'pill ok' : 'pill err'}>{connected ? 'Live' : 'Disconnected'}</span>
+        <h1>Mission Control · Retro Office</h1>
+        <span className={connected ? 'pill ok' : 'pill err'}>{connected ? 'WS live' : 'WS offline'}</span>
       </header>
 
-      <main className="layout">
-        <section className="panel office-panel">
-          <h2>Office</h2>
-          <div className="office-room">
-            {agentList.map(([name, agent]) => {
-              const pos = officeSlots[name] || { left: '50%', top: '50%' }
-              const hover = latestEventByAgent[name] || agent
-              const isHovered = hoveredAgent === name
-              const agentEvents = recentEventsByAgent[name] || []
-              return (
-                <div
-                  key={name}
-                  className="office-agent-wrap"
-                  style={{ left: pos.left, top: pos.top }}
-                  onMouseEnter={() => setHoveredAgent(name)}
-                  onMouseLeave={() => setHoveredAgent((prev) => (prev === name ? null : prev))}
-                >
-                  <button
-                    className={`office-agent ${selected === name ? 'selected' : ''}`}
-                    style={{ borderColor: statusColor[agent.status] || '#64748b' }}
-                    onClick={() => setSelected(name)}
-                    onFocus={() => setHoveredAgent(name)}
-                    onBlur={() => setHoveredAgent((prev) => (prev === name ? null : prev))}
-                    aria-label={`Agent ${name}`}
-                  >
-                    <span className="dot" style={{ background: statusColor[agent.status] || '#94a3b8' }} />
-                    <strong>{name}</strong>
-                    <small>{agent.status}</small>
-                  </button>
-
-                  {isHovered && (
-                    <div className="agent-popover" role="tooltip">
-                      <h3>{name}</h3>
-                      <p><b>Status:</b> {hover.status || 'idle'}</p>
-                      <p><b>Model:</b> {hover.model || 'n/a'}</p>
-                      <p><b>Task:</b> {hover.task || 'n/a'}</p>
-                      <p><b>Recent events:</b></p>
-                      <ul>
-                        {agentEvents.length > 0 ? agentEvents.map((item, idx) => (
-                          <li key={`${name}-${idx}`}>
-                            <span>{item.status} · {item.task || 'n/a'}</span>
-                            <small>{item.at ? new Date(item.at).toLocaleTimeString() : 'n/a'}</small>
-                          </li>
-                        )) : <li><span>none</span></li>}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+      <div className="canvas-wrap">
+        <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H} className="retro-canvas" />
+        {hover && hover.agent && (
+          <div className="hover-popover" style={{ left: hover.x + 14, top: hover.y + 14 }}>
+            <h3>{hover.name}</h3>
+            <p><b>Status:</b> {hover.agent.status || 'idle'}</p>
+            <p><b>Model:</b> {hover.agent.model || 'n/a'}</p>
+            <p><b>Task:</b> {hover.agent.task || 'n/a'}</p>
+            <p><b>Last 3 events:</b></p>
+            <ul>
+              {hover.events.length > 0 ? hover.events.map((e, idx) => (
+                <li key={`${hover.name}-${idx}`}>{e.status} · {e.task}</li>
+              )) : <li>none</li>}
+            </ul>
           </div>
-          <div className="legend">
-            {Object.keys(statusColor).map((k) => (
-              <span key={k}><i style={{ background: statusColor[k] }} />{k}</span>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel side-panel">
-          <h2>{selected} details</h2>
-          {selectedAgent ? (
-            <>
-              <p><b>Status:</b> {selectedAgent.status}</p>
-              <p><b>Task:</b> {selectedAgent.task}</p>
-              <p><b>Updated:</b> {new Date(selectedAgent.updatedAt).toLocaleTimeString()}</p>
-            </>
-          ) : <p>No data yet.</p>}
-
-          <h2>Activity</h2>
-          <ul className="events">
-            {events.slice(0, 12).map((e) => (
-              <li key={e.id || `${e.name}-${e.updatedAt}`}>
-                <b>{e.data?.name || e.name}</b> → {e.data?.status || e.status}
-                <small>{new Date(e.at || e.updatedAt).toLocaleTimeString()}</small>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </main>
+        )}
+      </div>
     </div>
   )
 }
