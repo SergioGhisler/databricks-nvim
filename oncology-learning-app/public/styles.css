@@ -13,5 +13,10 @@ button.secondary { background: #374151; }
 input, textarea, select { width: 100%; background:#0f172a; color:#e2e8f0; border:1px solid #334155; border-radius:8px; padding:8px; margin-bottom:8px; }
 ul { margin: 0; padding-left: 18px; }
 .badge { display: inline-block; background: #1d4ed8; padding: 4px 8px; border-radius: 999px; font-size: 12px; margin-right: 6px; }
-.quiz-feedback { font-size: 14px; margin-top: 8px; }
+.quiz-feedback { font-size: 14px; margin-top: 8px; line-height: 1.4; }
+.quiz-actions { display: flex; gap: 8px; margin-top: 6px; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+.mcq-option { display: block; background:#0f172a; border:1px solid #334155; border-radius:8px; padding:8px; margin-bottom:6px; }
+.correct-option { border-color: #22c55e; background: #052e16; }
+.wrong-option { border-color: #ef4444; background: #450a0a; }
 .case-template { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 8px; margin-bottom: 8px; }
