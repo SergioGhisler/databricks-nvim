@@ -1,0 +1,55 @@
+{
+  "topics": [
+    {
+      "id": "topic-1",
+      "name": "Canine lymphoma staging and substage impact",
+      "mastery": 20
+    },
+    {
+      "id": "topic-2",
+      "name": "Osteosarcoma adjuvant chemotherapy decisions",
+      "mastery": 20
+    }
+  ],
+  "quizBank": [
+    {
+      "id": "q-1",
+      "topicId": "topic-1",
+      "type": "mcq",
+      "question": "Which stage generally indicates bone marrow involvement in lymphoma staging systems?",
+      "options": [
+        "Stage III",
+        "Stage IV",
+        "Stage V",
+        "Stage I"
+      ],
+      "answer": "Stage V",
+      "explanation": "Stage V generally includes bone marrow, blood, or other non-lymphoid organ involvement."
+    },
+    {
+      "id": "q-2",
+      "topicId": "topic-1",
+      "type": "short",
+      "question": "List two common dose-limiting toxicities to monitor during CHOP-like protocols.",
+      "answerKeywords": [
+        "neutropenia",
+        "gastrointestinal toxicity",
+        "thrombocytopenia",
+        "febrile neutropenia"
+      ],
+      "explanation": "Hematologic and GI toxicities are commonly monitored and can drive dose adjustments."
+    }
+  ],
+  "cases": [
+    {
+      "id": "case-1",
+      "title": "Canine osteosarcoma post-amputation review",
+      "template": [
+        "Histologic grade and margins",
+        "Thoracic staging findings",
+        "Adjuvant chemo protocol choice",
+        "Monitoring plan and owner communication"
+      ]
+    }
+  ]
+}
