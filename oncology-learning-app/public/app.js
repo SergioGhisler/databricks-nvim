@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'oncologyLearningProgressV1'
+const QUIZ_PREFS_KEY = 'oncologyQuizPrefsV1'
 
 const state = {
   kb: { topics: [], quizBank: [], cases: [] },
@@ -7,6 +8,12 @@ const state = {
     streak: 0,
     lastStudyDate: null,
     topicMastery: {},
+    quizAnalytics: {
+      byTopicDifficulty: {},
+      trend: [],
+      askedCounts: {},
+      recentQuestionIds: [],
+    },
   },
   quizIndex: 0,
   quizSession: {
@@ -17,6 +24,7 @@ const state = {
     explainWhy: true,
     difficulty: 'intern',
     topicId: 'all',
+    currentQuestionId: null,
   },
 }
 
@@ -27,11 +35,39 @@ function todayIso() {
 function loadProgress() {
   const raw = localStorage.getItem(STORAGE_KEY)
   if (!raw) return
-  try { state.progress = { ...state.progress, ...JSON.parse(raw) } } catch {}
+  try {
+    state.progress = { ...state.progress, ...JSON.parse(raw) }
+    state.progress.quizAnalytics = {
+      byTopicDifficulty: {},
+      trend: [],
+      askedCounts: {},
+      recentQuestionIds: [],
+      ...(state.progress.quizAnalytics || {}),
+    }
+  } catch {}
 }
 
 function saveProgress() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.progress))
+}
+
+function loadQuizPrefs() {
+  const raw = localStorage.getItem(QUIZ_PREFS_KEY)
+  if (!raw) return
+  try {
+    const prefs = JSON.parse(raw)
+    state.quizSession.topicId = prefs.topicId || 'all'
+    state.quizSession.difficulty = prefs.difficulty || 'intern'
+    state.quizSession.explainWhy = typeof prefs.explainWhy === 'boolean' ? prefs.explainWhy : true
+  } catch {}
+}
+
+function saveQuizPrefs() {
+  localStorage.setItem(QUIZ_PREFS_KEY, JSON.stringify({
+    topicId: state.quizSession.topicId,
+    difficulty: state.quizSession.difficulty,
+    explainWhy: state.quizSession.explainWhy,
+  }))
 }
 
 function getMastery(topic) {
@@ -40,6 +76,52 @@ function getMastery(topic) {
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v))
+}
+
+function pickWeightedQuestion(filtered) {
+  if (!filtered.length) return null
+  const asked = state.progress.quizAnalytics.askedCounts || {}
+  const recent = state.progress.quizAnalytics.recentQuestionIds || []
+  const recentSet = new Set(recent)
+
+  let pool = filtered
+  const nonRecent = filtered.filter((q) => !recentSet.has(q.id))
+  if (nonRecent.length > 0) pool = nonRecent
+
+  const weighted = pool.map((q) => {
+    const timesAsked = asked[q.id] || 0
+    const weight = 1 / (1 + timesAsked)
+    return { q, weight }
+  })
+
+  const total = weighted.reduce((acc, w) => acc + w.weight, 0)
+  let r = Math.random() * total
+  for (const w of weighted) {
+    r -= w.weight
+    if (r <= 0) return w.q
+  }
+  return weighted[weighted.length - 1]?.q || pool[0]
+}
+
+function recordQuizAnalytics(question, isCorrect) {
+  const difficulty = question.difficulty || 'intern'
+  const key = `${question.topicId}::${difficulty}`
+  const stats = state.progress.quizAnalytics.byTopicDifficulty[key] || { asked: 0, correct: 0 }
+  stats.asked += 1
+  if (isCorrect) stats.correct += 1
+  state.progress.quizAnalytics.byTopicDifficulty[key] = stats
+
+  const askedCounts = state.progress.quizAnalytics.askedCounts || {}
+  askedCounts[question.id] = (askedCounts[question.id] || 0) + 1
+  state.progress.quizAnalytics.askedCounts = askedCounts
+
+  const trend = state.progress.quizAnalytics.trend || []
+  trend.push({ at: new Date().toISOString(), topicId: question.topicId, difficulty, correct: isCorrect ? 1 : 0 })
+  state.progress.quizAnalytics.trend = trend.slice(-200)
+
+  const recent = state.progress.quizAnalytics.recentQuestionIds || []
+  recent.push(question.id)
+  state.progress.quizAnalytics.recentQuestionIds = recent.slice(-5)
 }
 
 function refreshProgressViews() {
@@ -65,6 +147,9 @@ function renderDashboard() {
     ? Math.round(state.kb.topics.reduce((acc, t) => acc + getMastery(t), 0) / state.kb.topics.length)
     : 0
 
+  const analytics = state.progress.quizAnalytics.byTopicDifficulty || {}
+  const trend = state.progress.quizAnalytics.trend || []
+
   root.innerHTML = `
     <h2>1) Topic Mastery Dashboard</h2>
     <p><span class="badge">XP ${state.progress.xp}</span><span class="badge">Streak ${state.progress.streak} day(s)</span><span class="badge">Avg Mastery ${avg}%</span></p>
@@ -78,6 +163,18 @@ function renderDashboard() {
             <button data-topic-inc="${t.id}" class="secondary">+ Quick Review XP</button>
           </div>
         `
+      }).join('')}
+    </div>
+
+    <h3>Quiz Analytics (Topic + Difficulty)</h3>
+    <div class="analytics-grid">
+      ${Object.keys(analytics).length === 0 ? '<p>No quiz analytics yet.</p>' : Object.entries(analytics).map(([k, v]) => {
+        const [topicId, difficulty] = k.split('::')
+        const topicName = state.kb.topics.find((t) => t.id === topicId)?.name || topicId
+        const accuracy = v.asked ? Math.round((v.correct / v.asked) * 100) : 0
+        const recent = trend.filter((x) => x.topicId === topicId && x.difficulty === difficulty).slice(-10)
+        const trendPct = recent.length ? Math.round((recent.reduce((a, x) => a + x.correct, 0) / recent.length) * 100) : 0
+        return `<div class="analytics-card"><b>${topicName}</b><br/><small>${difficulty.toUpperCase()}</small><br/>Accuracy: <b>${accuracy}%</b> (${v.correct}/${v.asked})<br/>Recent trend (last ${recent.length || 0}): <b>${trendPct}%</b></div>`
       }).join('')}
     </div>
   `
@@ -125,6 +222,7 @@ function scoreShortAnswer(input, keywords = []) {
 function resetQuizStateForNextQuestion() {
   state.quizSession.submitted = false
   state.quizSession.feedbackHtml = ''
+  state.quizSession.currentQuestionId = null
 }
 
 function getFilteredQuizBank() {
@@ -146,7 +244,13 @@ function renderQuiz() {
     return
   }
 
-  const q = filtered[state.quizIndex % filtered.length]
+  let q = filtered.find((item) => item.id === state.quizSession.currentQuestionId)
+  if (!q) {
+    q = pickWeightedQuestion(filtered)
+    state.quizSession.currentQuestionId = q?.id || null
+  }
+  const qPos = Math.max(0, filtered.findIndex((item) => item.id === q.id))
+
   root.innerHTML = `
     <h2>3) Quiz Mode (MCQ + Short Answer)</h2>
     <div class="quiz-controls">
@@ -164,7 +268,7 @@ function renderQuiz() {
       </label>
       <label class="checkbox-inline"><input type="checkbox" id="explain-why" ${state.quizSession.explainWhy ? 'checked' : ''}/> Explain-why mode</label>
     </div>
-    <p class="quiz-score"><span id="quiz-score-badge" class="badge">Score ${state.quizSession.correct}/${state.quizSession.answered}</span><span class="badge">Question ${(state.quizIndex % filtered.length) + 1}/${filtered.length}</span><span class="badge">Level ${(q.difficulty || 'intern').toUpperCase()}</span></p>
+    <p class="quiz-score"><span id="quiz-score-badge" class="badge">Score ${state.quizSession.correct}/${state.quizSession.answered}</span><span class="badge">Question ${qPos + 1}/${filtered.length}</span><span class="badge">Level ${(q.difficulty || 'intern').toUpperCase()}</span></p>
     <p><b>${q.question}</b></p>
     ${q.type === 'mcq'
       ? `<div id="mcq-options">${q.options.map((o, i) => `<label class="mcq-option" data-option="${o.replace(/"/g, '&quot;')}"><input type="radio" name="quiz-answer" value="${o.replace(/"/g, '&quot;')}" /> ${String.fromCharCode(65 + i)}. ${o}</label>`).join('')}</div>`
@@ -223,6 +327,8 @@ function renderQuiz() {
     state.quizSession.submitted = true
     state.quizSession.answered += 1
     if (isCorrect) state.quizSession.correct += 1
+    recordQuizAnalytics(q, isCorrect)
+    saveProgress()
 
     if (q.type === 'short') {
       awardStudy(q.topicId, isCorrect ? 6 : 3)
@@ -242,6 +348,8 @@ function renderQuiz() {
   root.querySelector('#next-quiz')?.addEventListener('click', () => {
     state.quizIndex = (state.quizIndex + 1) % filtered.length
     resetQuizStateForNextQuestion()
+    const next = pickWeightedQuestion(filtered)
+    state.quizSession.currentQuestionId = next?.id || null
     renderQuiz()
   })
 
@@ -249,6 +357,7 @@ function renderQuiz() {
     state.quizSession.topicId = ev.target.value
     state.quizIndex = 0
     resetQuizStateForNextQuestion()
+    saveQuizPrefs()
     renderQuiz()
   })
 
@@ -256,12 +365,14 @@ function renderQuiz() {
     state.quizSession.difficulty = ev.target.value
     state.quizIndex = 0
     resetQuizStateForNextQuestion()
+    saveQuizPrefs()
     renderQuiz()
   })
 
   root.querySelector('#explain-why')?.addEventListener('change', (ev) => {
     state.quizSession.explainWhy = Boolean(ev.target.checked)
     resetQuizStateForNextQuestion()
+    saveQuizPrefs()
     renderQuiz()
   })
 }
@@ -288,6 +399,7 @@ function renderAll() {
 
 async function boot() {
   loadProgress()
+  loadQuizPrefs()
   const res = await fetch('/api/kb')
   state.kb = await res.json()
   renderAll()

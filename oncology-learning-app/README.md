@@ -2,7 +2,7 @@
 
 Local single-user **veterinary oncology** internship/residency learning app.
 
-## Scope (V1.1)
+## Scope (V1.2)
 - Oncology-only topic mastery dashboard (0-100)
 - XP + streak gamification
 - Daily review plan (auto-prioritized by low mastery)
@@ -10,6 +10,9 @@ Local single-user **veterinary oncology** internship/residency learning app.
 - Explain-why mode (clinical rationale + common mistake)
 - Difficulty toggle (Intern / Resident)
 - Topic-focused quiz selector (all or single oncology topic)
+- Per-topic + per-difficulty analytics (accuracy + recent trend)
+- Anti-repeat weighted question selection
+- Persisted quiz preferences in localStorage (topic/difficulty/explain-why)
 - Oncology case review templates
 - Admin ingest script for local notes/PDF extracts -> structured JSON KB
 - English only
@@ -38,6 +41,18 @@ Feedback behavior remains immediate:
 - MCQ: correct/incorrect + highlighted correct option
 - Short answer: pass/partial/fail + model answer + explanation
 - Score updates live and `Next Question` resets state cleanly
+
+## V1.2 Analytics + Selection
+- Dashboard now includes **Quiz Analytics (Topic + Difficulty)** cards showing:
+  - lifetime accuracy (`correct/asked`)
+  - recent trend over last 10 attempts in each topic+difficulty bucket
+- Next question now uses anti-repeat weighted selection:
+  - deprioritizes recently seen questions
+  - favors lower exposure questions using inverse-ask weighting
+- Quiz preferences persist in localStorage via `oncologyQuizPrefsV1`:
+  - selected topic
+  - difficulty level
+  - explain-why toggle
 
 ## Tailscale Sharing
 This app is designed for private Tailscale-only sharing.
