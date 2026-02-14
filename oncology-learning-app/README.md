@@ -2,7 +2,7 @@
 
 Local single-user **veterinary oncology** internship/residency learning app.
 
-## Scope (V1.2)
+## Scope (V1.3)
 - Oncology-only topic mastery dashboard (0-100)
 - XP + streak gamification
 - Daily review plan (auto-prioritized by low mastery)
@@ -13,6 +13,9 @@ Local single-user **veterinary oncology** internship/residency learning app.
 - Per-topic + per-difficulty analytics (accuracy + recent trend)
 - Anti-repeat weighted question selection
 - Persisted quiz preferences in localStorage (topic/difficulty/explain-why)
+- Schema validation for seed/imported content
+- Content quality lint report generation + UI summary loader
+- CSV export of topic+difficulty analytics from dashboard
 - Oncology case review templates
 - Admin ingest script for local notes/PDF extracts -> structured JSON KB
 - English only
@@ -42,17 +45,19 @@ Feedback behavior remains immediate:
 - Short answer: pass/partial/fail + model answer + explanation
 - Score updates live and `Next Question` resets state cleanly
 
-## V1.2 Analytics + Selection
-- Dashboard now includes **Quiz Analytics (Topic + Difficulty)** cards showing:
+## V1.2/V1.3 Analytics + Selection + Quality
+- Dashboard includes **Quiz Analytics (Topic + Difficulty)** cards showing:
   - lifetime accuracy (`correct/asked`)
   - recent trend over last 10 attempts in each topic+difficulty bucket
-- Next question now uses anti-repeat weighted selection:
+- **Export analytics CSV** button downloads topic+difficulty counts/trends.
+- Next question uses anti-repeat weighted selection:
   - deprioritizes recently seen questions
-  - favors lower exposure questions using inverse-ask weighting
+  - favors lower exposure questions via inverse-ask weighting
 - Quiz preferences persist in localStorage via `oncologyQuizPrefsV1`:
   - selected topic
   - difficulty level
   - explain-why toggle
+- **Load content lint summary** button fetches latest lint summary from `reports/content-lint-summary.json` via API.
 
 ## Tailscale Sharing
 This app is designed for private Tailscale-only sharing.
@@ -82,6 +87,26 @@ To use generated content in V1 quickly:
 1. Review `data/kb.generated.json`
 2. Copy/merge into `data/kb.json`
 3. Refresh browser
+
+## Content Validation + Lint (V1.3)
+Validate schema for seed + generated KB:
+```bash
+npm run validate-content
+```
+
+Generate content quality lint summary:
+```bash
+npm run lint-content
+```
+
+Output:
+- `reports/content-lint-summary.json`
+
+Validation enforces required quiz fields including:
+- `difficulty`
+- `rationale`
+- `commonMistake`
+- `modelAnswer` (required for short-answer)
 
 ## Input Template Example (`content/raw/*.txt`)
 ```text
