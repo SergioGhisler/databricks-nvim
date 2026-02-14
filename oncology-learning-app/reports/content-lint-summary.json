@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-02-14T13:51:51.345Z",
+  "summary": {
+    "filesScanned": 2,
+    "totalWarnings": 0,
+    "weakRationaleCount": 0,
+    "weakCommonMistakeCount": 0
+  },
+  "files": [
+    {
+      "path": "/Users/Alyx/.openclaw/workspace/oncology-learning-app/data/kb.json",
+      "warningCount": 0,
+      "warnings": []
+    },
+    {
+      "path": "/Users/Alyx/.openclaw/workspace/oncology-learning-app/data/kb.generated.json",
+      "warningCount": 0,
+      "warnings": []
+    }
+  ]
+}

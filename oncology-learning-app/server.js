@@ -13,6 +13,7 @@ app.use(express.json({ limit: '2mb' }))
 app.use(express.static(path.join(__dirname, 'public')))
 
 const kbPath = path.join(__dirname, 'data', 'kb.json')
+const lintSummaryPath = path.join(__dirname, 'reports', 'content-lint-summary.json')
 
 app.get('/api/kb', (_req, res) => {
   try {
@@ -20,6 +21,18 @@ app.get('/api/kb', (_req, res) => {
     res.json(JSON.parse(raw))
   } catch {
     res.json({ topics: [], quizBank: [], cases: [] })
+  }
+})
+
+app.get('/api/content-lint-summary', (_req, res) => {
+  try {
+    if (!fs.existsSync(lintSummaryPath)) {
+      return res.json({ ok: false, reason: 'missing-report' })
+    }
+    const raw = fs.readFileSync(lintSummaryPath, 'utf8')
+    res.json({ ok: true, ...JSON.parse(raw) })
+  } catch {
+    res.json({ ok: false, reason: 'read-failed' })
   }
 })
 

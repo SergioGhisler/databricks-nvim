@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "ingest": "node scripts/ingest-content.mjs"
+    "ingest": "node scripts/ingest-content.mjs",
+    "validate-content": "node scripts/validate-content.mjs",
+    "lint-content": "node scripts/lint-content.mjs"
   },
   "dependencies": {
     "express": "^4.21.2"

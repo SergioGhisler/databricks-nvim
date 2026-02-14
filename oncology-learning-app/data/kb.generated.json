@@ -15,6 +15,7 @@
     {
       "id": "q-1",
       "topicId": "topic-1",
+      "difficulty": "intern",
       "type": "mcq",
       "question": "Which stage generally indicates bone marrow involvement in lymphoma staging systems?",
       "options": [
@@ -24,11 +25,14 @@
         "Stage I"
       ],
       "answer": "Stage V",
-      "explanation": "Stage V generally includes bone marrow, blood, or other non-lymphoid organ involvement."
+      "explanation": "Stage V generally includes bone marrow, blood, or other non-lymphoid organ involvement.",
+      "rationale": "Stage V generally includes bone marrow, blood, or other non-lymphoid organ involvement.",
+      "commonMistake": "Selecting an answer without integrating staging/prognostic context."
     },
     {
       "id": "q-2",
       "topicId": "topic-1",
+      "difficulty": "intern",
       "type": "short",
       "question": "List two common dose-limiting toxicities to monitor during CHOP-like protocols.",
       "answerKeywords": [
@@ -37,7 +41,10 @@
         "thrombocytopenia",
         "febrile neutropenia"
       ],
-      "explanation": "Hematologic and GI toxicities are commonly monitored and can drive dose adjustments."
+      "modelAnswer": "neutropenia, gastrointestinal toxicity, thrombocytopenia, febrile neutropenia",
+      "explanation": "Hematologic and GI toxicities are commonly monitored and can drive dose adjustments.",
+      "rationale": "Hematologic and GI toxicities are commonly monitored and can drive dose adjustments.",
+      "commonMistake": "Providing generic points without case-linked prioritization."
     }
   ],
   "cases": [

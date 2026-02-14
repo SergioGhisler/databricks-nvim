@@ -124,6 +124,52 @@ function recordQuizAnalytics(question, isCorrect) {
   state.progress.quizAnalytics.recentQuestionIds = recent.slice(-5)
 }
 
+function exportAnalyticsCsv() {
+  const analytics = state.progress.quizAnalytics.byTopicDifficulty || {}
+  const trend = state.progress.quizAnalytics.trend || []
+  const rows = [['topicId', 'difficulty', 'asked', 'correct', 'accuracyPct', 'recentTrendPct']]
+
+  Object.entries(analytics).forEach(([key, stats]) => {
+    const [topicId, difficulty] = key.split('::')
+    const accuracyPct = stats.asked ? Math.round((stats.correct / stats.asked) * 100) : 0
+    const recent = trend.filter((x) => x.topicId === topicId && x.difficulty === difficulty).slice(-10)
+    const recentTrendPct = recent.length ? Math.round((recent.reduce((a, x) => a + x.correct, 0) / recent.length) * 100) : 0
+    rows.push([topicId, difficulty, stats.asked, stats.correct, accuracyPct, recentTrendPct])
+  })
+
+  const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `oncology-analytics-${todayIso()}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+async function loadLintSummaryIntoDashboard(containerEl) {
+  try {
+    const res = await fetch('/api/content-lint-summary')
+    const data = await res.json()
+    if (!data?.ok) {
+      containerEl.innerHTML = '<p>Lint report not found yet. Run <code>npm run lint-content</code>.</p>'
+      return
+    }
+
+    containerEl.innerHTML = `
+      <div class="lint-box">
+        <b>Content lint summary</b><br/>
+        Files scanned: ${data.summary.filesScanned}<br/>
+        Total warnings: ${data.summary.totalWarnings}<br/>
+        Weak rationale flags: ${data.summary.weakRationaleCount}<br/>
+        Weak common-mistake flags: ${data.summary.weakCommonMistakeCount}
+      </div>
+    `
+  } catch {
+    containerEl.innerHTML = '<p>Unable to load lint report.</p>'
+  }
+}
+
 function refreshProgressViews() {
   renderDashboard()
   renderDailyPlan()
@@ -167,6 +213,11 @@ function renderDashboard() {
     </div>
 
     <h3>Quiz Analytics (Topic + Difficulty)</h3>
+    <div class="analytics-actions">
+      <button id="export-analytics-csv" class="secondary">Export analytics CSV</button>
+      <button id="load-lint-summary" class="secondary">Load content lint summary</button>
+    </div>
+    <div id="lint-summary"></div>
     <div class="analytics-grid">
       ${Object.keys(analytics).length === 0 ? '<p>No quiz analytics yet.</p>' : Object.entries(analytics).map(([k, v]) => {
         const [topicId, difficulty] = k.split('::')
@@ -181,6 +232,11 @@ function renderDashboard() {
 
   root.querySelectorAll('[data-topic-inc]').forEach((btn) => {
     btn.addEventListener('click', () => awardStudy(btn.dataset.topicInc, 4))
+  })
+  root.querySelector('#export-analytics-csv')?.addEventListener('click', exportAnalyticsCsv)
+  root.querySelector('#load-lint-summary')?.addEventListener('click', () => {
+    const el = root.querySelector('#lint-summary')
+    if (el) loadLintSummaryIntoDashboard(el)
   })
 }
 
