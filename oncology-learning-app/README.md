@@ -2,11 +2,14 @@
 
 Local single-user **veterinary oncology** internship/residency learning app.
 
-## Scope (V1)
+## Scope (V1.1)
 - Oncology-only topic mastery dashboard (0-100)
 - XP + streak gamification
 - Daily review plan (auto-prioritized by low mastery)
-- Quiz mode (MCQ + short answer with feedback)
+- Quiz mode (MCQ + short answer with immediate feedback)
+- Explain-why mode (clinical rationale + common mistake)
+- Difficulty toggle (Intern / Resident)
+- Topic-focused quiz selector (all or single oncology topic)
 - Oncology case review templates
 - Admin ingest script for local notes/PDF extracts -> structured JSON KB
 - English only
@@ -20,6 +23,21 @@ npm run start
 ```
 Open:
 - Local: `http://localhost:4040`
+
+## Quiz Usage (V1.1)
+In Quiz Mode you can now:
+- Select **Topic** (`All oncology topics` or a specific topic like mast cell, lymphoma, osteosarcoma)
+- Select **Difficulty**:
+  - `Intern` = intern-tagged questions
+  - `Resident` = intern + resident-tagged questions with deeper feedback cues
+- Toggle **Explain-why mode** to include concise:
+  - Clinical rationale
+  - Common mistake
+
+Feedback behavior remains immediate:
+- MCQ: correct/incorrect + highlighted correct option
+- Short answer: pass/partial/fail + model answer + explanation
+- Score updates live and `Next Question` resets state cleanly
 
 ## Tailscale Sharing
 This app is designed for private Tailscale-only sharing.
@@ -73,12 +91,13 @@ CASE: Feline lymphoma workup template
 ## V2 TODO (clear next steps)
 1. Add structured topic taxonomy (tumor type, species, modality)
 2. Add spaced-repetition scheduler per topic/question
-3. Add per-question difficulty and adaptive quiz selection
+3. Add adaptive difficulty engine (performance-based auto level, not manual only)
 4. Add richer case authoring + export to PDF
 5. Add deterministic ingest validation + schema checks
 6. Add oncology protocol calculators and toxicity grading tools
 7. Add study analytics timeline (weekly/monthly)
 8. Add optional local semantic retrieval backend (still no public exposure)
+9. Add explain-why authoring QA checks to enforce rationale quality in imported content
 
 ## Notes
 - Browser localStorage stores progress (`xp`, `streak`, mastery updates)

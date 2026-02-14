@@ -10,19 +10,74 @@
     {
       "id": "q1",
       "topicId": "lymphoma",
+      "difficulty": "intern",
       "type": "mcq",
       "question": "Which immunophenotype generally has a better prognosis in canine multicentric lymphoma?",
       "options": ["T-cell", "B-cell", "Null-cell", "Plasma-cell"],
       "answer": "B-cell",
-      "explanation": "B-cell lymphoma often has better response duration and overall prognosis than T-cell in many cohorts."
+      "explanation": "B-cell lymphoma often has better response duration and overall prognosis than T-cell in many cohorts.",
+      "rationale": "Immunophenotype helps predict remission duration and should guide owner counseling early.",
+      "commonMistake": "Assuming all multicentric lymphoma behaves similarly regardless of B/T-cell status."
     },
     {
       "id": "q2",
       "topicId": "mast-cell",
+      "difficulty": "intern",
       "type": "short",
       "question": "Name two negative prognostic indicators for canine mast cell tumors.",
       "answerKeywords": ["high grade", "high mitotic index", "metastasis", "subcutaneous high grade", "KIT mutation"],
-      "explanation": "Grade, mitotic index, and metastatic disease are key prognostic drivers."
+      "modelAnswer": "High histologic grade and high mitotic index (or metastatic disease) are key adverse indicators.",
+      "explanation": "Grade, mitotic index, and metastatic disease are key prognostic drivers.",
+      "rationale": "Prognostic markers influence both staging intensity and decisions on adjuvant systemic therapy.",
+      "commonMistake": "Relying on tumor size alone while missing pathology and nodal status."
+    },
+    {
+      "id": "q3",
+      "topicId": "osteosarcoma",
+      "difficulty": "intern",
+      "type": "mcq",
+      "question": "After limb amputation for appendicular canine osteosarcoma, what is the most common adjuvant systemic approach?",
+      "options": ["No further therapy", "Single-dose vincristine", "Platinum-based chemotherapy", "Metronomic cyclophosphamide only"],
+      "answer": "Platinum-based chemotherapy",
+      "explanation": "Carboplatin/cisplatin-based protocols are commonly used adjuvantly to improve disease-free intervals.",
+      "rationale": "Micrometastatic control is central after local control surgery in high metastatic-risk tumors.",
+      "commonMistake": "Assuming surgery alone is adequate long-term treatment in most osteosarcoma patients."
+    },
+    {
+      "id": "q4",
+      "topicId": "chemotherapy-safety",
+      "difficulty": "resident",
+      "type": "short",
+      "question": "List three actions you would take for grade 4 neutropenia after chemotherapy.",
+      "answerKeywords": ["hospitalization", "broad-spectrum antibiotics", "delay chemo", "dose reduction", "cbc recheck", "febrile monitoring"],
+      "modelAnswer": "Hospitalize if unstable, start broad-spectrum antibiotics, delay/reduce next dose, and repeat CBC monitoring.",
+      "explanation": "Severe neutropenia requires infection risk mitigation and protocol modification for safety.",
+      "rationale": "Management balances immediate sepsis prevention with long-term protocol continuity and safety.",
+      "commonMistake": "Continuing full-dose treatment without interval bloodwork and toxicity grading review."
+    },
+    {
+      "id": "q5",
+      "topicId": "hemangiosarcoma",
+      "difficulty": "resident",
+      "type": "mcq",
+      "question": "Which statement best reflects prognosis after splenectomy for stage II splenic hemangiosarcoma?",
+      "options": ["Surgery alone is usually curative", "Adjuvant doxorubicin-based therapy is commonly recommended", "Radiation is first-line systemic therapy", "No staging is needed before treatment"],
+      "answer": "Adjuvant doxorubicin-based therapy is commonly recommended",
+      "explanation": "Even after surgery, metastatic risk remains high, so adjuvant systemic therapy is frequently discussed.",
+      "rationale": "High biologic aggressiveness means local control alone rarely addresses systemic disease risk.",
+      "commonMistake": "Overstating benefit of surgery alone and under-communicating metastatic relapse risk."
+    },
+    {
+      "id": "q6",
+      "topicId": "mast-cell",
+      "difficulty": "resident",
+      "type": "mcq",
+      "question": "For high-grade mast cell tumor with nodal metastasis, which planning step is most appropriate?",
+      "options": ["Observation only", "Stage thoroughly and discuss multimodal therapy", "Treat only with antihistamines", "Skip nodal assessment"],
+      "answer": "Stage thoroughly and discuss multimodal therapy",
+      "explanation": "Advanced mast cell disease often requires integrated surgery/systemic/radiation planning.",
+      "rationale": "Nodal disease changes stage and expected outcomes, affecting treatment aggressiveness.",
+      "commonMistake": "Managing metastatic disease as if it were a low-risk local cutaneous mass."
     }
   ],
   "cases": [

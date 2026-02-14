@@ -14,6 +14,10 @@ input, textarea, select { width: 100%; background:#0f172a; color:#e2e8f0; border
 ul { margin: 0; padding-left: 18px; }
 .badge { display: inline-block; background: #1d4ed8; padding: 4px 8px; border-radius: 999px; font-size: 12px; margin-right: 6px; }
 .quiz-feedback { font-size: 14px; margin-top: 8px; line-height: 1.4; }
+.quiz-controls { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.quiz-controls label { font-size: 12px; color: #cbd5e1; }
+.checkbox-inline { display: flex; align-items: center; gap: 6px; margin-top: 18px; }
+.checkbox-inline input { width: auto; margin: 0; }
 .quiz-actions { display: flex; gap: 8px; margin-top: 6px; }
 button:disabled { opacity: 0.6; cursor: not-allowed; }
 .mcq-option { display: block; background:#0f172a; border:1px solid #334155; border-radius:8px; padding:8px; margin-bottom:6px; }
