@@ -14,6 +14,9 @@ const state = {
     correct: 0,
     submitted: false,
     feedbackHtml: '',
+    explainWhy: true,
+    difficulty: 'intern',
+    topicId: 'all',
   },
 }
 
@@ -124,23 +127,50 @@ function resetQuizStateForNextQuestion() {
   state.quizSession.feedbackHtml = ''
 }
 
+function getFilteredQuizBank() {
+  return state.kb.quizBank.filter((q) => {
+    const topicMatch = state.quizSession.topicId === 'all' || q.topicId === state.quizSession.topicId
+    const difficulty = q.difficulty || 'intern'
+    const difficultyMatch = state.quizSession.difficulty === 'resident'
+      ? ['resident', 'intern'].includes(difficulty)
+      : difficulty === 'intern'
+    return topicMatch && difficultyMatch
+  })
+}
+
 function renderQuiz() {
   const root = document.getElementById('quiz')
-  if (!state.kb.quizBank.length) {
-    root.innerHTML = '<h2>3) Quiz Mode</h2><p>No quiz items available.</p>'
+  const filtered = getFilteredQuizBank()
+  if (!filtered.length) {
+    root.innerHTML = '<h2>3) Quiz Mode</h2><p>No quiz items match the selected topic/difficulty.</p>'
     return
   }
 
-  const q = state.kb.quizBank[state.quizIndex % state.kb.quizBank.length]
+  const q = filtered[state.quizIndex % filtered.length]
   root.innerHTML = `
     <h2>3) Quiz Mode (MCQ + Short Answer)</h2>
-    <p class="quiz-score"><span id="quiz-score-badge" class="badge">Score ${state.quizSession.correct}/${state.quizSession.answered}</span><span class="badge">Question ${state.quizIndex + 1}</span></p>
+    <div class="quiz-controls">
+      <label>Topic
+        <select id="quiz-topic">
+          <option value="all" ${state.quizSession.topicId === 'all' ? 'selected' : ''}>All oncology topics</option>
+          ${state.kb.topics.map((t) => `<option value="${t.id}" ${state.quizSession.topicId === t.id ? 'selected' : ''}>${t.name}</option>`).join('')}
+        </select>
+      </label>
+      <label>Difficulty
+        <select id="quiz-difficulty">
+          <option value="intern" ${state.quizSession.difficulty === 'intern' ? 'selected' : ''}>Intern</option>
+          <option value="resident" ${state.quizSession.difficulty === 'resident' ? 'selected' : ''}>Resident</option>
+        </select>
+      </label>
+      <label class="checkbox-inline"><input type="checkbox" id="explain-why" ${state.quizSession.explainWhy ? 'checked' : ''}/> Explain-why mode</label>
+    </div>
+    <p class="quiz-score"><span id="quiz-score-badge" class="badge">Score ${state.quizSession.correct}/${state.quizSession.answered}</span><span class="badge">Question ${(state.quizIndex % filtered.length) + 1}/${filtered.length}</span><span class="badge">Level ${(q.difficulty || 'intern').toUpperCase()}</span></p>
     <p><b>${q.question}</b></p>
     ${q.type === 'mcq'
       ? `<div id="mcq-options">${q.options.map((o, i) => `<label class="mcq-option" data-option="${o.replace(/"/g, '&quot;')}"><input type="radio" name="quiz-answer" value="${o.replace(/"/g, '&quot;')}" /> ${String.fromCharCode(65 + i)}. ${o}</label>`).join('')}</div>`
       : '<textarea id="quiz-answer" rows="3" placeholder="Type your short answer..."></textarea>'}
     <div class="quiz-actions">
-      <button id="submit-quiz">Submit</button>
+      <button id="submit-quiz" ${state.quizSession.submitted ? 'disabled' : ''}>Submit</button>
       <button id="next-quiz" class="secondary">Next Question</button>
     </div>
     <div id="quiz-feedback" class="quiz-feedback">${state.quizSession.feedbackHtml}</div>
@@ -165,9 +195,12 @@ function renderQuiz() {
         if (option === selected && selected !== q.answer) el.classList.add('wrong-option')
       })
 
+      const explainBlock = state.quizSession.explainWhy
+        ? `<br/><br/><b>Clinical rationale:</b> ${q.rationale || q.explanation || 'n/a'}<br/><b>Common mistake:</b> ${q.commonMistake || 'Choosing based on memorized buzzwords instead of staging/prognostic context.'}`
+        : ''
       state.quizSession.feedbackHtml = isCorrect
-        ? `✅ <b>Correct</b><br/>${q.explanation}`
-        : `❌ <b>Incorrect</b><br/>Correct option: <b>${q.answer}</b><br/>${q.explanation}`
+        ? `✅ <b>Correct</b><br/>${q.explanation || ''}${explainBlock}`
+        : `❌ <b>Incorrect</b><br/>Correct option: <b>${q.answer}</b><br/>${q.explanation || ''}${explainBlock}`
     } else {
       const input = root.querySelector('#quiz-answer')?.value?.trim() || ''
       if (!input) {
@@ -177,8 +210,14 @@ function renderQuiz() {
       }
       const rubric = scoreShortAnswer(input, q.answerKeywords || [])
       isCorrect = rubric.label === 'pass'
-      const model = (q.answerKeywords || []).join(', ')
-      state.quizSession.feedbackHtml = `${rubric.label === 'pass' ? '✅' : rubric.label === 'partial' ? '🟡' : '❌'} <b>${rubric.label.toUpperCase()}</b> (${rubric.hits} keyword hits)<br/>Model answer cues: <b>${model || 'n/a'}</b><br/>${q.explanation}`
+      const model = q.modelAnswer || (q.answerKeywords || []).join(', ')
+      const depth = state.quizSession.difficulty === 'resident'
+        ? `<br/><b>Resident depth:</b> include decision thresholds, expected toxicities, and follow-up planning.`
+        : ''
+      const explainBlock = state.quizSession.explainWhy
+        ? `<br/><br/><b>Clinical rationale:</b> ${q.rationale || q.explanation || 'n/a'}<br/><b>Common mistake:</b> ${q.commonMistake || 'Giving generic oncology facts without case-specific risk framing.'}`
+        : ''
+      state.quizSession.feedbackHtml = `${rubric.label === 'pass' ? '✅' : rubric.label === 'partial' ? '🟡' : '❌'} <b>${rubric.label.toUpperCase()}</b> (${rubric.hits} keyword hits)<br/>Model answer: <b>${model || 'n/a'}</b><br/>${q.explanation || ''}${depth}${explainBlock}`
     }
 
     state.quizSession.submitted = true
@@ -201,7 +240,27 @@ function renderQuiz() {
   })
 
   root.querySelector('#next-quiz')?.addEventListener('click', () => {
-    state.quizIndex = (state.quizIndex + 1) % state.kb.quizBank.length
+    state.quizIndex = (state.quizIndex + 1) % filtered.length
+    resetQuizStateForNextQuestion()
+    renderQuiz()
+  })
+
+  root.querySelector('#quiz-topic')?.addEventListener('change', (ev) => {
+    state.quizSession.topicId = ev.target.value
+    state.quizIndex = 0
+    resetQuizStateForNextQuestion()
+    renderQuiz()
+  })
+
+  root.querySelector('#quiz-difficulty')?.addEventListener('change', (ev) => {
+    state.quizSession.difficulty = ev.target.value
+    state.quizIndex = 0
+    resetQuizStateForNextQuestion()
+    renderQuiz()
+  })
+
+  root.querySelector('#explain-why')?.addEventListener('change', (ev) => {
+    state.quizSession.explainWhy = Boolean(ev.target.checked)
     resetQuizStateForNextQuestion()
     renderQuiz()
   })
