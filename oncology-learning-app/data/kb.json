@@ -1,0 +1,51 @@
+{
+  "topics": [
+    { "id": "lymphoma", "name": "Canine/Feline Lymphoma", "mastery": 35 },
+    { "id": "mast-cell", "name": "Mast Cell Tumors", "mastery": 50 },
+    { "id": "hemangiosarcoma", "name": "Hemangiosarcoma", "mastery": 25 },
+    { "id": "osteosarcoma", "name": "Osteosarcoma", "mastery": 40 },
+    { "id": "chemotherapy-safety", "name": "Chemotherapy Safety", "mastery": 65 }
+  ],
+  "quizBank": [
+    {
+      "id": "q1",
+      "topicId": "lymphoma",
+      "type": "mcq",
+      "question": "Which immunophenotype generally has a better prognosis in canine multicentric lymphoma?",
+      "options": ["T-cell", "B-cell", "Null-cell", "Plasma-cell"],
+      "answer": "B-cell",
+      "explanation": "B-cell lymphoma often has better response duration and overall prognosis than T-cell in many cohorts."
+    },
+    {
+      "id": "q2",
+      "topicId": "mast-cell",
+      "type": "short",
+      "question": "Name two negative prognostic indicators for canine mast cell tumors.",
+      "answerKeywords": ["high grade", "high mitotic index", "metastasis", "subcutaneous high grade", "KIT mutation"],
+      "explanation": "Grade, mitotic index, and metastatic disease are key prognostic drivers."
+    }
+  ],
+  "cases": [
+    {
+      "id": "case1",
+      "title": "Canine multicentric lymphoma - initial workup",
+      "template": [
+        "Signalment and presenting complaint",
+        "Staging tests performed",
+        "Substage and immunophenotype",
+        "Initial protocol and owner goals",
+        "Monitoring and toxicity plan"
+      ]
+    },
+    {
+      "id": "case2",
+      "title": "Feline injection-site sarcoma planning",
+      "template": [
+        "Tumor mapping and imaging",
+        "Surgical margin strategy",
+        "Adjuvant radiation/chemo considerations",
+        "Follow-up intervals and recurrence risk discussion"
+      ]
+    }
+  ]
+}
